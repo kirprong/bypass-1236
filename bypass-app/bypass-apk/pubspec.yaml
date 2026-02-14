@@ -1,0 +1,44 @@
+name: bypass_1236
+description: "BYPASS-1236 - Productivity Timer with 1-2-3-6 technique"
+publish_to: 'none'
+
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.11.0
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # State management
+  provider: ^6.1.1
+
+  # Audio
+  just_audio: ^0.9.36
+
+  # Local storage
+  shared_preferences: ^2.2.2
+
+  # Background notifications
+  flutter_local_notifications: ^17.0.0
+
+  # Vibration
+  vibration: ^1.8.4
+
+  # Keep awake
+  wakelock_plus: ^1.2.0
+
+  cupertino_icons: ^1.0.8
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: true
+
+  assets:
+    - assets/sounds/
