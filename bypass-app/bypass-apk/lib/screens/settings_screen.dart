@@ -163,7 +163,7 @@ class SettingsScreen extends StatelessWidget {
       onTap: () async {
         if (statsProvider.isPremium) {
           // Деактивация премиум
-          final prefs = await statsProvider.initialize();
+          // Removed unused variable
           statsProvider.resetAll();
         } else {
           statsProvider.activatePremium();

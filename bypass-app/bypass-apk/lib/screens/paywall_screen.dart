@@ -82,7 +82,7 @@ class PaywallScreen extends StatelessWidget {
       decoration: BoxDecoration(
         gradient: LinearGradient(
           colors: [
-            AppConstants.phase3Color.withOpacity(0.2),
+            AppConstants.phase3Color.withValues(alpha: 0.2),
             AppConstants.backgroundColor,
           ],
           begin: Alignment.topCenter,
@@ -90,7 +90,7 @@ class PaywallScreen extends StatelessWidget {
         ),
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
-          color: AppConstants.phase3Color.withOpacity(0.3),
+          color: AppConstants.phase3Color.withValues(alpha: 0.3),
           width: 2,
         ),
       ),
@@ -144,10 +144,10 @@ class PaywallScreen extends StatelessWidget {
           margin: const EdgeInsets.only(bottom: 16),
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
-            color: (feature['color'] as Color).withOpacity(0.1),
+            color: (feature['color'] as Color).withValues(alpha: 0.1),
             borderRadius: BorderRadius.circular(12),
             border: Border.all(
-              color: (feature['color'] as Color).withOpacity(0.3),
+              color: (feature['color'] as Color).withValues(alpha: 0.3),
               width: 1,
             ),
           ),
@@ -204,7 +204,7 @@ class PaywallScreen extends StatelessWidget {
       decoration: BoxDecoration(
         gradient: LinearGradient(
           colors: [
-            AppConstants.inertiaColor.withOpacity(0.3),
+            AppConstants.inertiaColor.withValues(alpha: 0.3),
             AppConstants.backgroundColor,
           ],
           begin: Alignment.topLeft,
@@ -287,7 +287,7 @@ class PaywallScreen extends StatelessWidget {
                 borderRadius: BorderRadius.circular(30),
                 boxShadow: [
                   BoxShadow(
-                    color: AppConstants.inertiaColor.withOpacity(0.5),
+                    color: AppConstants.inertiaColor.withValues(alpha: 0.5),
                     blurRadius: 20,
                     spreadRadius: 2,
                   ),

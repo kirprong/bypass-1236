@@ -104,7 +104,7 @@ class StatsScreen extends StatelessWidget {
       decoration: BoxDecoration(
         gradient: LinearGradient(
           colors: [
-            rank['color'].withOpacity(0.3),
+            rank['color'].withValues(alpha: 0.3),
             AppConstants.backgroundColor,
           ],
           begin: Alignment.topLeft,
@@ -112,7 +112,7 @@ class StatsScreen extends StatelessWidget {
         ),
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
-          color: rank['color'].withOpacity(0.5),
+          color: rank['color'].withValues(alpha: 0.5),
           width: 2,
         ),
       ),
@@ -159,7 +159,7 @@ class StatsScreen extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: AppConstants.textSecondaryColor.withOpacity(0.1),
+        color: AppConstants.textSecondaryColor.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(12),
       ),
       child: Column(
@@ -193,7 +193,7 @@ class StatsScreen extends StatelessWidget {
             child: LinearProgressIndicator(
               value: 1.0 - (strikesToNext / (nextRank['strikes'] - currentRank['strikes'])),
               minHeight: 8,
-              backgroundColor: AppConstants.textSecondaryColor.withOpacity(0.2),
+              backgroundColor: AppConstants.textSecondaryColor.withValues(alpha: 0.2),
               valueColor: AlwaysStoppedAnimation<Color>(nextRank['color']),
             ),
           ),
@@ -217,7 +217,7 @@ class StatsScreen extends StatelessWidget {
       decoration: BoxDecoration(
         gradient: LinearGradient(
           colors: [
-            color.withOpacity(0.2),
+            color.withValues(alpha: 0.2),
             AppConstants.backgroundColor,
           ],
           begin: Alignment.centerLeft,
@@ -225,7 +225,7 @@ class StatsScreen extends StatelessWidget {
         ),
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
-          color: color.withOpacity(0.3),
+          color: color.withValues(alpha: 0.3),
           width: 1,
         ),
       ),
@@ -249,7 +249,7 @@ class StatsScreen extends StatelessWidget {
                   subtitle,
                   style: TextStyle(
                     fontSize: 10,
-                    color: AppConstants.textSecondaryColor.withOpacity(0.6),
+                    color: AppConstants.textSecondaryColor.withValues(alpha: 0.6),
                   ),
                 ),
               ],

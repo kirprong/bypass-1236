@@ -23,7 +23,7 @@ class MainScreen extends StatelessWidget {
                     decoration: BoxDecoration(
                       gradient: RadialGradient(
                         colors: [
-                          color.withOpacity(0.15),
+                          color.withValues(alpha: 0.15),
                           AppConstants.backgroundColor,
                         ],
                         center: const Alignment(0, -0.2),
@@ -129,7 +129,7 @@ class MainScreen extends StatelessWidget {
           fontFamily: 'monospace',
           color: color,
           letterSpacing: timer.isInertiaMode ? 4 : 8,
-          shadows: [Shadow(color: color.withOpacity(0.5), blurRadius: 30)],
+          shadows: [Shadow(color: color.withValues(alpha: 0.5), blurRadius: 30)],
         ),
         maxLines: 1,
       ),
@@ -239,7 +239,7 @@ class MainScreen extends StatelessWidget {
           borderRadius: BorderRadius.circular(12),
           boxShadow: [
             BoxShadow(
-              color: color.withOpacity(glow ? 0.8 : 0.4),
+              color: color.withValues(alpha: glow ? 0.8 : 0.4),
               blurRadius: glow ? 20 : 10,
               offset: const Offset(0, 4),
             ),
@@ -279,7 +279,7 @@ class MainScreen extends StatelessWidget {
                 color: color,
                 borderRadius: BorderRadius.circular(3),
                 boxShadow: isActive
-                    ? [BoxShadow(color: color.withOpacity(0.6), blurRadius: 8)]
+                    ? [BoxShadow(color: color.withValues(alpha: 0.6), blurRadius: 8)]
                     : [],
               ),
             ),

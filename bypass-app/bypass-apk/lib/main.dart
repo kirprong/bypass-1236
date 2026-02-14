@@ -80,7 +80,7 @@ class _HomePageState extends State<HomePage> {
   final List<Widget> _screens = [
     const MainScreen(),
     const StatsScreen(),
-    const SettingsScreen(), // Добавлен третий экран!
+    const SettingsScreen(),
   ];
 
   @override
@@ -93,11 +93,12 @@ class _HomePageState extends State<HomePage> {
     // Включаем wakelock чтобы экран не гас во время работы
     WakelockPlus.enable();
     
-    // Инициализируем провайдеры
+    // Инициализируем провайдеры БЕЗ использования context после async
+    if (!mounted) return;
     final statsProvider = context.read<StatsProvider>();
-    await statsProvider.initialize();
-    
     final timerProvider = context.read<TimerProvider>();
+    
+    await statsProvider.initialize();
     await timerProvider.initialize();
   }
 
