@@ -23,9 +23,6 @@ dependencies:
   # Background notifications
   flutter_local_notifications: ^17.0.0
 
-  # Vibration
-  vibration: ^1.8.4
-
   # Keep awake
   wakelock_plus: ^1.2.0
 
