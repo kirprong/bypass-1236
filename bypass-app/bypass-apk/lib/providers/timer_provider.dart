@@ -2,7 +2,6 @@ import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:vibration/vibration.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 import '../services/audio_service.dart';
 import '../utils/constants.dart';
@@ -232,7 +231,6 @@ class TimerProvider with ChangeNotifier {
       }
 
       _audioService.playInertiaSound();
-      _vibrateShort();
       notifyListeners();
       _saveState();
     }
@@ -261,7 +259,6 @@ class TimerProvider with ChangeNotifier {
     _hasPlayedWarning = false;
 
     _audioService.playPhaseSound(_currentPhaseIndex);
-    _vibratePhase();
     notifyListeners();
     _saveState();
   }
@@ -289,7 +286,6 @@ class TimerProvider with ChangeNotifier {
     }
 
     _audioService.playPhaseSound(_currentPhaseIndex);
-    _vibratePhase();
     _startTimerLoop();
     notifyListeners();
     _saveState();
@@ -297,91 +293,85 @@ class TimerProvider with ChangeNotifier {
 
   /// Завершение фазы (АВТОМАТИЧЕСКИЕ ПЕРЕХОДЫ 1→2→3)
   void _onPhaseComplete() {
-    _vibratePhase(); // Вибрация при окончании фазы
-
     // АВТОМАТИЧЕСКИЕ ПЕРЕХОДЫ: 1 → 2 → 3
     if (_currentPhaseIndex < 2) {
+      // Фазы 0, 1 → автоматически переходят к следующей
       _currentPhaseIndex++;
       _remainingSeconds = AppConstants.getPhaseDuration(_currentPhaseIndex);
+      _hasPlayedWarning = false;
 
       final now = DateTime.now().millisecondsSinceEpoch;
       _targetEndTimeMillis = now + (_remainingSeconds * 1000);
-      _hasPlayedWarning = false;
 
+      // Звуки при переходах
       _audioService.playPhaseSound(_currentPhaseIndex);
 
-      debugPrint('TIMER: Автоматический переход на фазу $_currentPhaseIndex');
+      debugPrint(
+        'TIMER: Автопереход на фазу $_currentPhaseIndex (${AppConstants.getPhaseName(_currentPhaseIndex)})',
+      );
+
       notifyListeners();
       _saveState();
       return;
     }
 
-    // После фазы 3 (STRIKE) - РУЧНОЙ ВЫБОР
+    // Фаза 2 (THE STRIKE) завершена → ОСТАНАВЛИВАЕМ и ждём выбора
     if (_currentPhaseIndex == 2) {
       _isRunning = false;
-      _isWaitingForChoice = true;
       _timer?.cancel();
-      WakelockPlus.disable();
+      _targetEndTimeMillis = null;
+      _isWaitingForChoice = true;
 
-      // По истечении 3-х минутного таймера играет REST.mp3 (soundRecovery)
-      _audioService.playPhaseSound(3);
+      // Звук окончания фазы
+      _audioService.playFinishSound();
 
-      // Запускаем Dead Man's Switch (30с ожидания -> повтор beep)
+      // Запускаем Dead Man's Switch (30 секунд)
       _startDeadManSwitch();
 
-      debugPrint('TIMER: Фаза 3 завершена. Звук REST. Ожидание выбора.');
+      debugPrint('TIMER: Фаза 3 завершена. Ожидание выбора (ИНЕРЦИЯ/ОТДЫХ)');
+
       notifyListeners();
       _saveState();
       return;
     }
 
-    // После фазы 4 (RECOVERY) - цикл завершен
+    // Фаза 3 (RECOVERY) завершена → сброс
     if (_currentPhaseIndex == 3) {
-      _audioService.playSound(
-        'START_THINKING',
-      ); // scan.mp3 в конце 6-минутного интервала
+      _audioService.playFinishSound();
       reset();
+      debugPrint('TIMER: Цикл завершён. Сброс.');
       return;
     }
   }
 
-  /// Запуск Dead Man's Switch (30 секунд ПОСЛЕ фазы 3 БЕЗ выбора)
+  /// Dead Man's Switch - если нет выбора 30 секунд
   void _startDeadManSwitch() {
-    _deadManSwitchTimer?.cancel();
+    _stopDeadManSwitch(); // Останавливаем предыдущий если был
 
-    // Сначала ждем 30 секунд тишины
-    _deadManSwitchTimer = Timer(
-      const Duration(seconds: AppConstants.deadManSwitchSeconds),
-      () {
-        // Через 30 секунд запускаем ПОВТОРЯЮЩИЙСЯ писк каждую секунду
-        _deadManSwitchTimer = Timer.periodic(const Duration(seconds: 1), (
-          timer,
-        ) {
-          _audioService.playDeadManSwitchSound();
-          debugPrint('TIMER: Dead Man\'s Switch - ПОВТОРЯЮЩИЙСЯ ПИСК!');
-        });
-      },
-    );
+    int secondsLeft = AppConstants.deadManSwitchTimeout;
 
-    debugPrint('TIMER: Dead Man\'s Switch запущен (таймаут 30 сек)');
+    _deadManSwitchTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      secondsLeft--;
+
+      // Повторяющийся beep каждую секунду
+      if (secondsLeft <= AppConstants.deadManSwitchTimeout) {
+        _audioService.playWarningSound();
+      }
+
+      debugPrint('Dead Man\'s Switch: $secondsLeft секунд до авто-отдыха');
+
+      if (secondsLeft <= 0) {
+        // Автоматически переходим к отдыху
+        debugPrint('Dead Man\'s Switch сработал! Автоматический переход к ОТДЫХУ');
+        _stopDeadManSwitch();
+        startRecovery();
+      }
+    });
   }
 
-  /// Остановка Dead Man's Switch
   void _stopDeadManSwitch() {
     _deadManSwitchTimer?.cancel();
     _deadManSwitchTimer = null;
-  }
-
-  Future<void> _vibrateShort() async {
-    if (await Vibration.hasVibrator() ?? false) {
-      Vibration.vibrate(duration: 100);
-    }
-  }
-
-  Future<void> _vibratePhase() async {
-    if (await Vibration.hasVibrator() ?? false) {
-      Vibration.vibrate(pattern: [0, 500, 200, 500]);
-    }
   }
 
   String formatTime(int seconds) {

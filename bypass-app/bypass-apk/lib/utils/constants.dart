@@ -53,7 +53,7 @@ class AppConstants {
   static const String soundStart =
       'assets/sounds/start.mp3'; // Нажатие Start/Pause
   static const String soundWarning =
-      'assets/sounds/finish.mp3'; // Предупреждение за 6 секунд
+      'assets/sounds/beep.mp3'; // Предупреждение за 6 секунд
   static const String soundFinish =
       'assets/sounds/finish.mp3'; // Окончание фазы
   static const String soundDeadManSwitch =
@@ -69,6 +69,9 @@ class AppConstants {
       6; // Предупреждение за 6 секунд до конца фазы
   static const int deadManSwitchSeconds =
       30; // Dead Man's Switch таймаут после фазы 3
+  
+  // Алиас для совместимости
+  static int get deadManSwitchTimeout => deadManSwitchSeconds;
 
   // Лимиты для free версии
   static const int freeCyclesPerDay = 3;
