@@ -1,0 +1,98 @@
+name: Release Android APK
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release version (e.g., v1.0.0)'
+        required: true
+        default: 'v1.0.0'
+
+jobs:
+  release:
+    name: Build and Release APK
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: '17'
+          cache: 'gradle'
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.24.0'
+          channel: 'stable'
+          cache: true
+
+      - name: Install dependencies
+        working-directory: bypass-app/bypass-apk
+        run: flutter pub get
+
+      - name: Build APK
+        working-directory: bypass-app/bypass-apk
+        run: flutter build apk --release --split-per-abi
+
+      - name: Rename APK files
+        working-directory: bypass-app/bypass-apk/build/app/outputs/flutter-apk
+        run: |
+          mv app-armeabi-v7a-release.apk bypass-1236-armeabi-v7a.apk
+          mv app-arm64-v8a-release.apk bypass-1236-arm64-v8a.apk
+          mv app-x86_64-release.apk bypass-1236-x86_64.apk
+
+      - name: Create Release Notes
+        id: release_notes
+        run: |
+          cat > release_notes.md << 'EOF'
+          ## 🎯 BYPASS-1236 Release
+          
+          ### ✅ Основные возможности:
+          - **Автоматические переходы 1→2→3** - непрерывный рывок на 6 минут
+          - **Полная звуковая система** - Audio Anchors для каждой фазы
+          - **Dead Man's Switch** - защита от прокрастинации
+          - **Режим ИНЕРЦИЯ** - продолжай когда вошел в поток
+          - **Предупреждения** - звуковой сигнал за 6 секунд до конца фазы
+          
+          ### 📱 Какой APK выбрать:
+          - **arm64-v8a** - для современных Android устройств (рекомендуется)
+          - **armeabi-v7a** - для старых Android устройств
+          - **x86_64** - для эмуляторов и x86 устройств
+          
+          ### 🎵 Звуковая карта:
+          - `scan.mp3` - Фаза 1: THINKING
+          - `bolt.mp3` - Переход 1→2
+          - `siren.mp3` - Переход 2→3
+          - `rest.mp3` - Начало отдыха
+          - `ignite.mp3` - Активация инерции
+          - `beep.mp3` - Предупреждения
+          - `finish.mp3` - Окончание фазы
+          
+          ### 📋 Техническая информация:
+          - Flutter SDK: 3.24.0
+          - Build Date: $(date)
+          - Commit: ${{ github.sha }}
+          EOF
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ github.event.inputs.version || github.ref_name }}
+          name: BYPASS-1236 ${{ github.event.inputs.version || github.ref_name }}
+          body_path: release_notes.md
+          draft: false
+          prerelease: false
+          files: |
+            bypass-app/bypass-apk/build/app/outputs/flutter-apk/bypass-1236-armeabi-v7a.apk
+            bypass-app/bypass-apk/build/app/outputs/flutter-apk/bypass-1236-arm64-v8a.apk
+            bypass-app/bypass-apk/build/app/outputs/flutter-apk/bypass-1236-x86_64.apk
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
