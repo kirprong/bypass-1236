@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:just_audio/just_audio.dart';
+import 'package:just_audio_background/just_audio_background.dart';
 import '../utils/constants.dart';
 
 /// Сервис для управления звуковым сопровождением
@@ -27,20 +28,44 @@ class AudioService {
       _players['FINISH'] = AudioPlayer();
       _players['DEAD_MAN_SWITCH'] = AudioPlayer();
 
-      // Предзагрузка звуков
-      await _players['START_THINKING']!.setAsset(AppConstants.soundStartThinking);
-      await _players['PREP_PHASE']!.setAsset(AppConstants.soundPrepPhase);
-      await _players['STRIKE_PHASE']!.setAsset(AppConstants.soundStrikePhase);
-      await _players['RECOVERY']!.setAsset(AppConstants.soundRecovery);
-      await _players['INERTIA_ACTIVE']!.setAsset(AppConstants.soundInertiaActive);
-      await _players['START']!.setAsset(AppConstants.soundStart);
-      await _players['WARNING']!.setAsset(AppConstants.soundWarning);
-      await _players['FINISH']!.setAsset(AppConstants.soundFinish);
-      await _players['DEAD_MAN_SWITCH']!.setAsset(AppConstants.soundDeadManSwitch);
+      // Предзагрузка звуков с метаданными для фона
+      await _loadSound(
+          'START_THINKING', AppConstants.soundStartThinking, 'Scanning...');
+      await _loadSound(
+          'PREP_PHASE', AppConstants.soundPrepPhase, 'Preparation');
+      await _loadSound(
+          'STRIKE_PHASE', AppConstants.soundStrikePhase, 'The Strike');
+      await _loadSound('RECOVERY', AppConstants.soundRecovery, 'Recovery');
+      await _loadSound(
+          'INERTIA_ACTIVE', AppConstants.soundInertiaActive, 'Overdrive');
+      await _loadSound('START', AppConstants.soundStart, 'Timer Started');
+      await _loadSound('WARNING', AppConstants.soundWarning, 'Warning');
+      await _loadSound('FINISH', AppConstants.soundFinish, 'Phase Complete');
+      await _loadSound('DEAD_MAN_SWITCH', AppConstants.soundDeadManSwitch,
+          'Dead Man\'s Switch');
 
       _isInitialized = true;
     } catch (e) {
       debugPrint('Ошибка инициализации AudioService: $e');
+    }
+  }
+
+  /// Вспомогательный метод для загрузки звука с MediaItem
+  Future<void> _loadSound(String key, String assetPath, String title) async {
+    try {
+      final source = AudioSource.asset(
+        assetPath,
+        tag: MediaItem(
+          id: key,
+          album: "Bypass 1236",
+          title: title,
+          artUri: Uri.parse(
+              'https://media.istockphoto.com/id/1145618475/vector/stopwatch-timer-speed-alarm-clock-line-icon-vector-illustration.jpg?s=612x612&w=0&k=20&c=Xp_FywgC4e0zJz5t-5Lh7Qy-9Z8_j_0-7x_0-7x_0-7x_0'),
+        ),
+      );
+      await _players[key]!.setAudioSource(source);
+    } catch (e) {
+      debugPrint('Ошибка загрузки звука $key: $e');
     }
   }
 

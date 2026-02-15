@@ -9,22 +9,28 @@ import 'screens/stats_screen.dart';
 import 'screens/settings_screen.dart';
 import 'screens/paywall_screen.dart';
 import 'utils/constants.dart';
+import 'package:just_audio_background/just_audio_background.dart';
 
 void main() async {
+  await JustAudioBackground.init(
+    androidNotificationChannelId: 'com.example.bypass_1236.channel.audio',
+    androidNotificationChannelName: 'Audio playback',
+    androidNotificationOngoing: true,
+  );
   WidgetsFlutterBinding.ensureInitialized();
-  
+
   // Портретная ориентация
   await SystemChrome.setPreferredOrientations([
     DeviceOrientation.portraitUp,
     DeviceOrientation.portraitDown,
   ]);
-  
+
   // Скрываем системные панели для полного погружения
   SystemChrome.setEnabledSystemUIMode(
     SystemUiMode.edgeToEdge,
     overlays: [SystemUiOverlay.top],
   );
-  
+
   runApp(const BypassApp());
 }
 
@@ -76,7 +82,7 @@ class HomePage extends StatefulWidget {
 
 class _HomePageState extends State<HomePage> {
   int _currentIndex = 0;
-  
+
   final List<Widget> _screens = [
     const MainScreen(),
     const StatsScreen(),
@@ -92,12 +98,12 @@ class _HomePageState extends State<HomePage> {
   Future<void> _initialize() async {
     // Включаем wakelock чтобы экран не гас во время работы
     WakelockPlus.enable();
-    
+
     // Инициализируем провайдеры БЕЗ использования context после async
     if (!mounted) return;
     final statsProvider = context.read<StatsProvider>();
     final timerProvider = context.read<TimerProvider>();
-    
+
     await statsProvider.initialize();
     await timerProvider.initialize();
   }
