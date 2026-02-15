@@ -12,12 +12,14 @@ import 'utils/constants.dart';
 import 'package:just_audio_background/just_audio_background.dart';
 
 void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+
   await JustAudioBackground.init(
     androidNotificationChannelId: 'com.example.bypass_1236.channel.audio',
     androidNotificationChannelName: 'Audio playback',
     androidNotificationOngoing: true,
+    androidNotificationIcon: 'mipmap/ic_launcher',
   );
-  WidgetsFlutterBinding.ensureInitialized();
 
   // Портретная ориентация
   await SystemChrome.setPreferredOrientations([
@@ -128,10 +130,7 @@ class _HomePageState extends State<HomePage> {
       decoration: BoxDecoration(
         color: Colors.black,
         border: Border(
-          top: BorderSide(
-            color: const Color(0xFF333333),
-            width: 1,
-          ),
+          top: BorderSide(color: const Color(0xFF333333), width: 1),
         ),
       ),
       child: BottomNavigationBar(
