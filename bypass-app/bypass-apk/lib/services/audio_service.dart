@@ -66,11 +66,17 @@ class AudioService {
   /// Вспомогательный метод для загрузки звука
   Future<void> _loadSound(String key, String assetPath, String title) async {
     try {
+      debugPrint('   Loading: $key from $assetPath');
       final source = AudioSource.asset(assetPath);
       await _players[key]!.setAudioSource(source);
-      debugPrint('✅ Loaded sound: $key ($title)');
+      
+      // Предзагружаем (preload) для быстрого воспроизведения
+      await _players[key]!.load();
+      
+      debugPrint('✅ Loaded and preloaded: $key ($title)');
     } catch (e) {
       debugPrint('⚠️ Error loading sound $key: $e');
+      rethrow;
     }
   }
 
@@ -84,19 +90,23 @@ class AudioService {
     try {
       final player = _players[key];
       if (player != null) {
+        debugPrint('🔊 Attempting to play sound: $key');
+        
         // Для Android: принудительный стоп и перемотка для надежности повторного запуска
         if (player.playing) {
           await player.stop();
+          debugPrint('   Stopped previous playback');
         }
+        
         await player.seek(Duration.zero);
+        debugPrint('   Seeked to start');
+        
+        // Устанавливаем громкость на максимум
+        await player.setVolume(1.0);
 
-        // Запускаем без await, чтобы не ждать окончания звука
-        player.play().catchError((e) {
-          debugPrint('⚠️ Error playing sound $key: $e');
-          return null;
-        });
-
-        debugPrint('🔊 Playing sound: $key');
+        // Запускаем воспроизведение и ждем, чтобы убедиться что началось
+        await player.play();
+        debugPrint('✅ Sound playing: $key');
       } else {
         debugPrint('⚠️ Player for $key not found');
       }

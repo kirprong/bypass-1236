@@ -12,11 +12,22 @@ import 'screens/paywall_screen.dart';
 import 'screens/loading_screen.dart';
 import 'utils/constants.dart';
 import 'services/notification_service.dart';
+import 'services/audio_service.dart';
 
 void main() async {
   // ⚠️ КРИТИЧНО: Обработка ошибок
   runZonedGuarded(() async {
     WidgetsFlutterBinding.ensureInitialized();
+
+    // КРИТИЧНО: Инициализация аудио в main() перед всем остальным
+    try {
+      debugPrint('🔊 Initializing AudioService in main()...');
+      await AudioService().initialize();
+      debugPrint('✅ AudioService initialized in main()');
+    } catch (e) {
+      debugPrint('⚠️ AudioService init failed: $e');
+      // Продолжаем работу без звука
+    }
 
     // Безопасная инициализация уведомлений
     try {

@@ -5,6 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 import '../services/audio_service.dart';
 import '../services/notification_service.dart';
+import '../services/foreground_service.dart';
 import '../utils/constants.dart';
 import 'stats_provider.dart';
 
@@ -57,10 +58,12 @@ class TimerProvider with ChangeNotifier {
     _statsProvider = statsProvider;
   }
 
-  /// Инициализация: аудио + восстановление состояния
+  /// Инициализация: восстановление состояния
   Future<void> initialize() async {
-    await _audioService.initialize();
+    // AudioService уже инициализирован в main()
+    debugPrint('🔧 TimerProvider: Restoring state...');
     await _restoreState();
+    debugPrint('✅ TimerProvider: State restored');
   }
 
   /// Сохранение состояния в SharedPreferences
@@ -219,6 +222,12 @@ class TimerProvider with ChangeNotifier {
     } else {
       _targetEndTimeMillis = now + (_remainingSeconds * 1000);
     }
+    
+    // Запускаем foreground service для фоновой работы
+    ForegroundService.start(
+      title: 'BYPASS-1236 Таймер',
+      body: 'Фаза: ${AppConstants.getPhaseName(_currentPhaseIndex)}',
+    );
 
     _startTimerLoop();
     notifyListeners();
@@ -231,6 +240,9 @@ class TimerProvider with ChangeNotifier {
     _targetEndTimeMillis = null;
     _inertiaStartTimeMillis = null;
     WakelockPlus.disable();
+    
+    // Останавливаем foreground service
+    ForegroundService.stop();
     
     // Скрываем уведомление при паузе
     _notificationService.hideNotification();
@@ -253,6 +265,9 @@ class TimerProvider with ChangeNotifier {
     _isWaitingForChoice = false;
     _hasPlayedWarning = false;
     WakelockPlus.disable();
+    
+    // Останавливаем foreground service
+    ForegroundService.stop();
     
     // Скрываем уведомление при сбросе
     _notificationService.hideNotification();
