@@ -1,0 +1,49 @@
+Fix: Add comprehensive error handling to prevent black screen on startup
+
+## Problem
+App showed black screen on Android devices after installation due to
+initialization failures that weren't being caught or handled.
+
+## Root Causes
+1. Async initialization in main() could hang without feedback
+2. No error handling for JustAudioBackground.init()
+3. SharedPreferences and AudioService could timeout
+4. No loading indicator for users
+5. App would crash silently on any init failure
+
+## Solution Applied
+1. **main.dart**
+   - Wrapped entire main() in runZonedGuarded for critical error catching
+   - Added try-catch blocks for all initialization steps
+   - Added comprehensive debug logging with emoji indicators
+   - Graceful degradation - continues even if features fail
+
+2. **SafeHomePage** (new wrapper)
+   - Shows loading screen during initialization
+   - 5-second timeouts on each provider initialization
+   - Displays error messages if something fails
+   - "Retry" button for recovery
+
+3. **LoadingScreen** (new screen)
+   - Shows initialization progress
+   - Displays detailed error messages
+   - User-friendly error recovery
+
+4. **AudioService improvements**
+   - 3-second timeout on each audio file load
+   - App continues without audio if loading fails
+   - Better error logging
+
+## Expected Behavior
+- **Before**: Black screen, no indication of what's wrong
+- **After**: Loading screen → either main screen OR error message with details
+
+## Testing
+- ✅ Flutter analyze: No issues found
+- ✅ Code compiles successfully
+- Ready for GitHub Actions build
+
+## Files Changed
+- lib/main.dart (added error handling)
+- lib/screens/loading_screen.dart (new file)
+- lib/services/audio_service.dart (added timeouts)

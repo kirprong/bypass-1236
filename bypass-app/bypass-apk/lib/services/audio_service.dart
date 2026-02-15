@@ -17,6 +17,8 @@ class AudioService {
     if (_isInitialized) return;
 
     try {
+      debugPrint('🔊 Initializing AudioService...');
+      
       // Создаем плееры для каждого звука
       _players['START_THINKING'] = AudioPlayer();
       _players['PREP_PHASE'] = AudioPlayer();
@@ -28,25 +30,37 @@ class AudioService {
       _players['FINISH'] = AudioPlayer();
       _players['DEAD_MAN_SWITCH'] = AudioPlayer();
 
-      // Предзагрузка звуков с метаданными для фона
+      // Предзагрузка звуков с метаданными для фона с таймаутом
       await _loadSound(
-          'START_THINKING', AppConstants.soundStartThinking, 'Scanning...');
+          'START_THINKING', AppConstants.soundStartThinking, 'Scanning...')
+          .timeout(const Duration(seconds: 3));
       await _loadSound(
-          'PREP_PHASE', AppConstants.soundPrepPhase, 'Preparation');
+          'PREP_PHASE', AppConstants.soundPrepPhase, 'Preparation')
+          .timeout(const Duration(seconds: 3));
       await _loadSound(
-          'STRIKE_PHASE', AppConstants.soundStrikePhase, 'The Strike');
-      await _loadSound('RECOVERY', AppConstants.soundRecovery, 'Recovery');
+          'STRIKE_PHASE', AppConstants.soundStrikePhase, 'The Strike')
+          .timeout(const Duration(seconds: 3));
+      await _loadSound('RECOVERY', AppConstants.soundRecovery, 'Recovery')
+          .timeout(const Duration(seconds: 3));
       await _loadSound(
-          'INERTIA_ACTIVE', AppConstants.soundInertiaActive, 'Overdrive');
-      await _loadSound('START', AppConstants.soundStart, 'Timer Started');
-      await _loadSound('WARNING', AppConstants.soundWarning, 'Warning');
-      await _loadSound('FINISH', AppConstants.soundFinish, 'Phase Complete');
+          'INERTIA_ACTIVE', AppConstants.soundInertiaActive, 'Overdrive')
+          .timeout(const Duration(seconds: 3));
+      await _loadSound('START', AppConstants.soundStart, 'Timer Started')
+          .timeout(const Duration(seconds: 3));
+      await _loadSound('WARNING', AppConstants.soundWarning, 'Warning')
+          .timeout(const Duration(seconds: 3));
+      await _loadSound('FINISH', AppConstants.soundFinish, 'Phase Complete')
+          .timeout(const Duration(seconds: 3));
       await _loadSound('DEAD_MAN_SWITCH', AppConstants.soundDeadManSwitch,
-          'Dead Man\'s Switch');
+          'Dead Man\'s Switch')
+          .timeout(const Duration(seconds: 3));
 
       _isInitialized = true;
+      debugPrint('✅ AudioService initialized successfully');
     } catch (e) {
-      debugPrint('Ошибка инициализации AudioService: $e');
+      debugPrint('⚠️ AudioService initialization failed: $e');
+      debugPrint('   App will continue without audio');
+      _isInitialized = false; // Работаем без звука
     }
   }
 
@@ -71,7 +85,10 @@ class AudioService {
 
   /// Воспроизведение звука по ключу
   Future<void> playSound(String key) async {
-    if (!_isInitialized) await initialize();
+    if (!_isInitialized) {
+      debugPrint('⚠️ AudioService not initialized - skipping sound $key');
+      return; // Продолжаем работу без звука
+    }
 
     try {
       final player = _players[key];
@@ -84,16 +101,16 @@ class AudioService {
 
         // Запускаем без await, чтобы не ждать окончания звука
         player.play().catchError((e) {
-          debugPrint('Ошибка при вызове play() для $key: $e');
+          debugPrint('⚠️ Error playing sound $key: $e');
           return null;
         });
 
-        debugPrint('AUDIO: Воспроизведение звука $key');
+        debugPrint('🔊 Playing sound: $key');
       } else {
-        debugPrint('AUDIO: Плеер для $key не найден');
+        debugPrint('⚠️ Player for $key not found');
       }
     } catch (e) {
-      debugPrint('Ошибка воспроизведения звука $key: $e');
+      debugPrint('⚠️ Error playing sound $key: $e');
     }
   }
 
