@@ -120,16 +120,16 @@ class AudioService {
     String soundKey;
     switch (phaseIndex) {
       case 0:
-        soundKey = 'START_THINKING'; // scan.mp3
-        break;
+        // Фаза 0 (THINKING) - звук играет при нажатии START (start.mp3), а не здесь
+        return; // Не играем звук для фазы 0
       case 1:
-        soundKey = 'PREP_PHASE'; // bolt.mp3
+        soundKey = 'PREP_PHASE'; // bolt.mp3 - переход 0→1
         break;
       case 2:
-        soundKey = 'STRIKE_PHASE'; // siren.mp3
+        soundKey = 'STRIKE_PHASE'; // siren.mp3 - переход 1→2
         break;
       case 3:
-        soundKey = 'RECOVERY'; // rest.mp3
+        soundKey = 'RECOVERY'; // rest.mp3 - начало отдыха
         break;
       default:
         return;
@@ -149,7 +149,7 @@ class AudioService {
 
   /// Воспроизведение звука предупреждения (за 6 секунд до конца)
   Future<void> playWarningSound() async {
-    await playSound('WARNING');
+    await playSound('FINISH'); // finish.mp3 - предупреждение за 6 секунд
   }
 
   /// Воспроизведение звука окончания фазы
@@ -159,7 +159,12 @@ class AudioService {
 
   /// Воспроизведение звука Dead Man's Switch (повторяющийся beep)
   Future<void> playDeadManSwitchSound() async {
-    await playSound('DEAD_MAN_SWITCH');
+    await playSound('WARNING'); // beep.mp3 - противно пищать
+  }
+  
+  /// Воспроизведение звука окончания цикла (конец отдыха)
+  Future<void> playCycleEndSound() async {
+    await playSound('START_THINKING'); // scan.mp3 - конец отдыха
   }
 
   /// Остановка всех звуков

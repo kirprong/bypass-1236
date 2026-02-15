@@ -145,11 +145,11 @@ class TimerProvider with ChangeNotifier {
         if (_targetEndTimeMillis != null) {
           final remaining = ((_targetEndTimeMillis! - now) / 1000).floor();
 
-          // Предупреждение за 6 секунд до конца (кроме фазы 3)
+          // Предупреждение за 6 секунд до конца (кроме фазы 2 STRIKE)
           if (remaining == AppConstants.warningBeforeEndSeconds &&
               !_hasPlayedWarning &&
               _currentPhaseIndex != 2) {
-            _audioService.playWarningSound();
+            _audioService.playWarningSound(); // finish.mp3
             _hasPlayedWarning = true;
             debugPrint(
               'TIMER: Предупреждение за 6 секунд до конца фазы $_currentPhaseIndex',
@@ -404,8 +404,7 @@ class TimerProvider with ChangeNotifier {
       _targetEndTimeMillis = null;
       _isWaitingForChoice = true;
 
-      // Звук окончания фазы
-      _audioService.playFinishSound();
+      // НЕТ звука окончания фазы 2 (по описанию)
       
       // Уведомление о выборе
       _notificationService.showSimpleNotification(
@@ -416,7 +415,7 @@ class TimerProvider with ChangeNotifier {
       // Запускаем Dead Man's Switch (30 секунд)
       _startDeadManSwitch();
 
-      debugPrint('TIMER: Фаза 3 завершена. Ожидание выбора (ИНЕРЦИЯ/ОТДЫХ)');
+      debugPrint('TIMER: Фаза 2 завершена. Ожидание выбора (ИНЕРЦИЯ/ОТДЫХ)');
 
       notifyListeners();
       _saveState();
@@ -425,7 +424,7 @@ class TimerProvider with ChangeNotifier {
 
     // Фаза 3 (RECOVERY) завершена → сброс
     if (_currentPhaseIndex == 3) {
-      _audioService.playFinishSound();
+      _audioService.playCycleEndSound(); // scan.mp3 - конец отдыха
       
       // Уведомление о завершении цикла
       _notificationService.showSimpleNotification(
@@ -450,7 +449,7 @@ class TimerProvider with ChangeNotifier {
 
       // Повторяющийся beep каждую секунду
       if (secondsLeft <= AppConstants.deadManSwitchTimeout) {
-        _audioService.playWarningSound();
+        _audioService.playDeadManSwitchSound(); // beep.mp3
       }
 
       debugPrint('Dead Man\'s Switch: $secondsLeft секунд до авто-отдыха');
