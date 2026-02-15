@@ -1,6 +1,5 @@
 import 'package:flutter/foundation.dart';
 import 'package:just_audio/just_audio.dart';
-import 'package:just_audio_background/just_audio_background.dart';
 import '../utils/constants.dart';
 
 /// Сервис для управления звуковым сопровождением
@@ -64,22 +63,14 @@ class AudioService {
     }
   }
 
-  /// Вспомогательный метод для загрузки звука с MediaItem
+  /// Вспомогательный метод для загрузки звука
   Future<void> _loadSound(String key, String assetPath, String title) async {
     try {
-      final source = AudioSource.asset(
-        assetPath,
-        tag: MediaItem(
-          id: key,
-          album: "Bypass 1236",
-          title: title,
-          artUri: Uri.parse(
-              'https://media.istockphoto.com/id/1145618475/vector/stopwatch-timer-speed-alarm-clock-line-icon-vector-illustration.jpg?s=612x612&w=0&k=20&c=Xp_FywgC4e0zJz5t-5Lh7Qy-9Z8_j_0-7x_0-7x_0-7x_0'),
-        ),
-      );
+      final source = AudioSource.asset(assetPath);
       await _players[key]!.setAudioSource(source);
+      debugPrint('✅ Loaded sound: $key ($title)');
     } catch (e) {
-      debugPrint('Ошибка загрузки звука $key: $e');
+      debugPrint('⚠️ Error loading sound $key: $e');
     }
   }
 

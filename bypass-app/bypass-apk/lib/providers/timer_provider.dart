@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 import '../services/audio_service.dart';
+import '../services/notification_service.dart';
 import '../utils/constants.dart';
 import 'stats_provider.dart';
 
@@ -24,6 +25,7 @@ class TimerProvider with ChangeNotifier {
   int? _inertiaStartTimeMillis;
 
   final AudioService _audioService = AudioService();
+  final NotificationService _notificationService = NotificationService();
   StatsProvider? _statsProvider;
 
   // Getters
@@ -125,6 +127,9 @@ class TimerProvider with ChangeNotifier {
     _timer?.cancel();
     WakelockPlus.enable();
     _hasPlayedWarning = false; // Сброс флага предупреждения
+    
+    // Показываем уведомление при старте таймера
+    _updateNotification();
 
     _timer = Timer.periodic(const Duration(milliseconds: 200), (timer) {
       final now = DateTime.now().millisecondsSinceEpoch;
@@ -158,7 +163,39 @@ class TimerProvider with ChangeNotifier {
       }
       notifyListeners();
       _saveState(); // Периодически сохраняем
+      
+      // Обновляем уведомление каждую секунду
+      if ((DateTime.now().millisecondsSinceEpoch ~/ 1000) % 1 == 0) {
+        _updateNotification();
+      }
     });
+  }
+  
+  /// Обновление уведомления с текущим статусом
+  void _updateNotification() {
+    if (!_isRunning) return;
+    
+    String title;
+    String body;
+    String progress;
+    
+    if (_isInertiaMode) {
+      title = '⚡ OVERDRIVE MODE';
+      body = 'Режим инерции активен';
+      progress = 'Прошло: ${formatTime(_inertiaSeconds)}';
+    } else {
+      title = '${AppConstants.getPhaseName(_currentPhaseIndex)} - ${formatTime(_remainingSeconds)}';
+      body = currentPhaseText;
+      int totalSeconds = AppConstants.getPhaseDuration(_currentPhaseIndex);
+      int elapsed = totalSeconds - _remainingSeconds;
+      progress = 'Прогресс: $elapsed/$totalSeconds сек';
+    }
+    
+    _notificationService.updateNotification(
+      title: title,
+      body: body,
+      progress: progress,
+    );
   }
 
   /// Старт/Стоп (Toggle)
@@ -194,6 +231,10 @@ class TimerProvider with ChangeNotifier {
     _targetEndTimeMillis = null;
     _inertiaStartTimeMillis = null;
     WakelockPlus.disable();
+    
+    // Скрываем уведомление при паузе
+    _notificationService.hideNotification();
+    
     notifyListeners();
     _saveState();
   }
@@ -212,6 +253,10 @@ class TimerProvider with ChangeNotifier {
     _isWaitingForChoice = false;
     _hasPlayedWarning = false;
     WakelockPlus.disable();
+    
+    // Скрываем уведомление при сбросе
+    _notificationService.hideNotification();
+    
     notifyListeners();
     _saveState();
   }
@@ -231,6 +276,13 @@ class TimerProvider with ChangeNotifier {
       }
 
       _audioService.playInertiaSound();
+      
+      // Уведомление об активации инерции
+      _notificationService.showSimpleNotification(
+        title: '⚡ OVERDRIVE активирован!',
+        body: 'Режим инерции запущен',
+      );
+      
       notifyListeners();
       _saveState();
     }
@@ -259,6 +311,15 @@ class TimerProvider with ChangeNotifier {
     _hasPlayedWarning = false;
 
     _audioService.playPhaseSound(_currentPhaseIndex);
+    
+    // Уведомление о дополнительном отдыхе
+    if (extraRestSeconds > 0) {
+      _notificationService.showSimpleNotification(
+        title: '🎁 Бонусный отдых!',
+        body: 'Получено +${extraRestSeconds ~/ 60} мин отдыха за инерцию',
+      );
+    }
+    
     notifyListeners();
     _saveState();
   }
@@ -305,6 +366,12 @@ class TimerProvider with ChangeNotifier {
 
       // Звуки при переходах
       _audioService.playPhaseSound(_currentPhaseIndex);
+      
+      // Показываем уведомление о смене фазы
+      _notificationService.showSimpleNotification(
+        title: '🎯 Новая фаза: ${AppConstants.getPhaseName(_currentPhaseIndex)}',
+        body: currentPhaseText,
+      );
 
       debugPrint(
         'TIMER: Автопереход на фазу $_currentPhaseIndex (${AppConstants.getPhaseName(_currentPhaseIndex)})',
@@ -324,6 +391,12 @@ class TimerProvider with ChangeNotifier {
 
       // Звук окончания фазы
       _audioService.playFinishSound();
+      
+      // Уведомление о выборе
+      _notificationService.showSimpleNotification(
+        title: '⚡ Выбор режима',
+        body: 'Инерция или отдых? У вас 30 секунд',
+      );
 
       // Запускаем Dead Man's Switch (30 секунд)
       _startDeadManSwitch();
@@ -338,6 +411,13 @@ class TimerProvider with ChangeNotifier {
     // Фаза 3 (RECOVERY) завершена → сброс
     if (_currentPhaseIndex == 3) {
       _audioService.playFinishSound();
+      
+      // Уведомление о завершении цикла
+      _notificationService.showSimpleNotification(
+        title: '✅ Цикл завершён!',
+        body: 'BYPASS-1236 цикл успешно пройден',
+      );
+      
       reset();
       debugPrint('TIMER: Цикл завершён. Сброс.');
       return;

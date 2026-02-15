@@ -11,25 +11,20 @@ import 'screens/settings_screen.dart';
 import 'screens/paywall_screen.dart';
 import 'screens/loading_screen.dart';
 import 'utils/constants.dart';
-import 'package:just_audio_background/just_audio_background.dart';
+import 'services/notification_service.dart';
 
 void main() async {
   // ⚠️ КРИТИЧНО: Обработка ошибок
   runZonedGuarded(() async {
     WidgetsFlutterBinding.ensureInitialized();
 
-    // Безопасная инициализация аудио
+    // Безопасная инициализация уведомлений
     try {
-      await JustAudioBackground.init(
-        androidNotificationChannelId: 'com.example.bypass_1236.channel.audio',
-        androidNotificationChannelName: 'Audio playback',
-        androidNotificationOngoing: true,
-        androidNotificationIcon: 'mipmap/ic_launcher',
-      );
-      debugPrint('✅ JustAudioBackground initialized');
+      await NotificationService().initialize();
+      debugPrint('✅ NotificationService initialized');
     } catch (e) {
-      debugPrint('⚠️ JustAudioBackground init failed: $e');
-      // Продолжаем работу без аудио-бэкграунда
+      debugPrint('⚠️ NotificationService init failed: $e');
+      // Продолжаем работу без уведомлений
     }
 
     // Безопасная установка ориентации

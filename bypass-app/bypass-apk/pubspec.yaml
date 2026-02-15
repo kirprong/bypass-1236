@@ -15,19 +15,21 @@ dependencies:
   provider: ^6.1.1
 
   # Audio
-  just_audio: ^0.9.36
+  just_audio: ^0.9.40
 
   # Local storage
   shared_preferences: ^2.2.2
 
   # Background notifications
-  flutter_local_notifications: ^17.0.0
+  flutter_local_notifications: ^17.2.3
 
   # Keep awake
-  wakelock_plus: ^1.2.0
+  wakelock_plus: ^1.2.8
 
   cupertino_icons: ^1.0.8
-  just_audio_background: ^0.0.1-beta.17
+  
+  # Permission handler
+  permission_handler: ^11.3.1
 
 dev_dependencies:
   flutter_test:
