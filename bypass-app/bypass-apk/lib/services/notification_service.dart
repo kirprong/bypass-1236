@@ -13,7 +13,7 @@ class NotificationService {
   
   bool _isInitialized = false;
   static const String _channelId = 'bypass_1236_audio_channel';
-  static const String _channelName = 'BYPASS-1236 Timer';
+  static const String _channelName = '1234 Timer';
   static const int _notificationId = 1236;
 
   /// Инициализация сервиса уведомлений
@@ -77,7 +77,7 @@ class NotificationService {
     const androidChannel = AndroidNotificationChannel(
       _channelId,
       _channelName,
-      description: 'Уведомления о фазах таймера BYPASS-1236',
+      description: 'Уведомления о фазах таймера 1234',
       importance: Importance.high,
       playSound: false, // Звуки управляются через just_audio
       enableVibration: false,
@@ -128,12 +128,12 @@ class NotificationService {
             ? BigTextStyleInformation(
                 '$body\n$progress',
                 contentTitle: title,
-                summaryText: 'BYPASS-1236',
+                summaryText: '1234',
               )
             : BigTextStyleInformation(
                 body,
                 contentTitle: title,
-                summaryText: 'BYPASS-1236',
+                summaryText: '1234',
               ),
       );
 

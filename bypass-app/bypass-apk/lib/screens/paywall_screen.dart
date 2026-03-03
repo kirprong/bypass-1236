@@ -97,7 +97,7 @@ class PaywallScreen extends StatelessWidget {
       child: Text(
         'Большинство людей проживают жизнь в режиме автопилота. '
         'Они планируют, откладывают, мечтают... но не делают.\n\n'
-        'Ты уже сделал первый шаг. Ты попробовал BYPASS-1236.\n\n'
+        'Ты уже сделал первый шаг. Ты попробовал 1234.\n\n'
         'Теперь вопрос: готов ли ты перейти на следующий уровень?',
         style: TextStyle(
           fontSize: 16,
@@ -316,7 +316,7 @@ class PaywallScreen extends StatelessWidget {
     return Text(
       'Это меньше, чем одна чашка помойного кофе в Starbucks.\n'
       'Но кофе даст тебе 2 часа бодрости.\n'
-      'BYPASS-1236 даст тебе контроль над всей жизнью.',
+      '1234 даст тебе контроль над всей жизнью.',
       style: TextStyle(
         fontSize: 14,
         color: AppConstants.textSecondaryColor,

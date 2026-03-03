@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-/// Константы приложения BYPASS-1236
+/// Константы приложения 1234
 class AppConstants {
   // Цвета фаз (неоновые акценты на черном фоне)
   static const Color phase1Color = Color(
@@ -13,8 +13,8 @@ class AppConstants {
     0xFFFF0000,
   ); // Агрессивный красный - STRIKE
   static const Color phase4Color = Color(
-    0xFF00FF41,
-  ); // Матричный зеленый - RECOVERY
+    0xFF0A1E5C,
+  ); // Глубокий синий - RECOVERY (для отдыха глаз)
   static const Color inertiaColor = Color(0xFFFFD700); // Золотой - INERTIA MODE
 
   // Основные цвета
@@ -26,19 +26,23 @@ class AppConstants {
   static const int phase1Duration = 60; // 1 минута - Анализ
   static const int phase2Duration = 120; // 2 минуты - Подготовка
   static const int phase3Duration = 180; // 3 минуты - Работа
-  static const int phase4Duration = 360; // 6 минут - Отдых
+  
+  // Фаза 4 (RECOVERY) - случайная длительность от 1 до 4 минут
+  static const int phase4MinDuration = 60; // Минимум 1 минута
+  static const int phase4MaxDuration = 240; // Максимум 4 минуты
+  static const int phase4Duration = 0; // Устарело, используется рандом
 
   // Названия фаз
   static const String phase1Name = 'THINKING';
   static const String phase2Name = 'PREP';
   static const String phase3Name = 'STRIKE';
-  static const String phase4Name = 'RECOVERY';
+  static const String phase4Name = 'ПЕРЕЗАГРУЗКА';
 
   // Тексты для фаз
   static const String phase1Text = 'ЦЕЛЬ?';
   static const String phase2Text = 'ОРУЖИЕ К БОЮ!';
   static const String phase3Text = 'УНИЧТОЖАЙ';
-  static const String phase4Text = 'ПЕРЕГРУППИРОВКА';
+  static const String phase4Text = 'БУДЬ ГОТОВ ВСЕГДА';
 
   // Звуковые файлы
   static const String soundStartThinking =

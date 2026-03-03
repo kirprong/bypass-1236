@@ -3,8 +3,37 @@ import 'package:provider/provider.dart';
 import '../providers/timer_provider.dart';
 import '../utils/constants.dart';
 
-class MainScreen extends StatelessWidget {
+class MainScreen extends StatefulWidget {
   const MainScreen({super.key});
+
+  @override
+  State<MainScreen> createState() => _MainScreenState();
+}
+
+class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateMixin {
+  late AnimationController _pulseController;
+  late Animation<double> _pulseAnimation;
+
+  @override
+  void initState() {
+    super.initState();
+    
+    // Создаем контроллер для пульсации (медленная, плавная)
+    _pulseController = AnimationController(
+      duration: const Duration(milliseconds: 2000),
+      vsync: this,
+    )..repeat(reverse: true);
+    
+    _pulseAnimation = Tween<double>(begin: 0.3, end: 1.0).animate(
+      CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
+    );
+  }
+
+  @override
+  void dispose() {
+    _pulseController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -114,6 +143,12 @@ class MainScreen extends StatelessWidget {
 
   Widget _buildTimerDisplay(TimerProvider timer) {
     final color = timer.currentPhaseColor;
+    
+    // Если фаза RECOVERY (фаза 3) - показываем пульсирующую анимацию вместо таймера
+    if (timer.currentPhaseIndex == 3 && !timer.isInertiaMode) {
+      return _buildRecoveryAnimation(color);
+    }
+    
     final displayTime = timer.isInertiaMode
         ? timer.inertiaSeconds
         : timer.remainingSeconds;
@@ -285,6 +320,40 @@ class MainScreen extends StatelessWidget {
             ),
           );
         }),
+      ),
+    );
+  }
+
+  /// Пульсирующая анимация для фазы RECOVERY
+  Widget _buildRecoveryAnimation(Color color) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 40),
+      child: AnimatedBuilder(
+        animation: _pulseAnimation,
+        builder: (context, child) {
+          return Container(
+            width: 200,
+            height: 200,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: color.withValues(alpha: _pulseAnimation.value * 0.3),
+              boxShadow: [
+                BoxShadow(
+                  color: color.withValues(alpha: _pulseAnimation.value * 0.5),
+                  blurRadius: 40 * _pulseAnimation.value,
+                  spreadRadius: 10 * _pulseAnimation.value,
+                ),
+              ],
+            ),
+            child: Center(
+              child: Icon(
+                Icons.autorenew,
+                size: 80,
+                color: color.withValues(alpha: _pulseAnimation.value),
+              ),
+            ),
+          );
+        },
       ),
     );
   }

@@ -86,7 +86,7 @@ class BypassApp extends StatelessWidget {
         ),
       ],
       child: MaterialApp(
-        title: 'BYPASS-1236',
+        title: '1234',
         debugShowCheckedModeBanner: false,
         theme: ThemeData(
           brightness: Brightness.dark,

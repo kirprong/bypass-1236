@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
@@ -225,7 +226,7 @@ class TimerProvider with ChangeNotifier {
     
     // Запускаем foreground service для фоновой работы
     ForegroundService.start(
-      title: 'BYPASS-1236 Таймер',
+      title: '1234 Таймер',
       body: 'Фаза: ${AppConstants.getPhaseName(_currentPhaseIndex)}',
     );
 
@@ -317,7 +318,15 @@ class TimerProvider with ChangeNotifier {
 
     // Формула из оригинала: 1 минута за каждые 10 минут переработки
     int extraRestSeconds = (_inertiaSeconds / 600).floor() * 60;
-    _remainingSeconds = AppConstants.phase4Duration + extraRestSeconds;
+    
+    // Генерируем случайную базовую длительность от 1 до 4 минут
+    final random = Random();
+    int baseRecoverySeconds = AppConstants.phase4MinDuration + 
+        random.nextInt(AppConstants.phase4MaxDuration - AppConstants.phase4MinDuration + 1);
+    
+    _remainingSeconds = baseRecoverySeconds + extraRestSeconds;
+    
+    debugPrint('🎲 RECOVERY после инерции: Базовая длительность = $baseRecoverySeconds сек, бонус = $extraRestSeconds сек');
 
     final now = DateTime.now().millisecondsSinceEpoch;
     _targetEndTimeMillis = now + (_remainingSeconds * 1000);
@@ -351,7 +360,13 @@ class TimerProvider with ChangeNotifier {
     }
 
     _currentPhaseIndex = 3; // RECOVERY
-    _remainingSeconds = AppConstants.phase4Duration;
+    
+    // Генерируем случайную длительность от 1 до 4 минут
+    final random = Random();
+    _remainingSeconds = AppConstants.phase4MinDuration + 
+        random.nextInt(AppConstants.phase4MaxDuration - AppConstants.phase4MinDuration + 1);
+    
+    debugPrint('🎲 RECOVERY: Случайная длительность = $_remainingSeconds сек (${_remainingSeconds ~/ 60} мин)');
 
     final now = DateTime.now().millisecondsSinceEpoch;
     _targetEndTimeMillis = now + (_remainingSeconds * 1000);
@@ -422,18 +437,32 @@ class TimerProvider with ChangeNotifier {
       return;
     }
 
-    // Фаза 3 (RECOVERY) завершена → сброс
+    // Фаза 3 (RECOVERY) завершена → автоматический переход к фазе 1
     if (_currentPhaseIndex == 3) {
       _audioService.playCycleEndSound(); // scan.mp3 - конец отдыха
       
       // Уведомление о завершении цикла
       _notificationService.showSimpleNotification(
-        title: '✅ Цикл завершён!',
-        body: 'BYPASS-1236 цикл успешно пройден',
+        title: '✅ Цикл завершён! Начинается новый',
+        body: 'Автоматический переход к THINKING',
       );
       
-      reset();
-      debugPrint('TIMER: Цикл завершён. Сброс.');
+      debugPrint('TIMER: Цикл завершён. Автоматический переход к фазе 1.');
+      
+      // Автоматически переходим к фазе 1 и запускаем таймер
+      _currentPhaseIndex = 0;
+      _remainingSeconds = AppConstants.phase1Duration;
+      _hasPlayedWarning = false;
+      _isWaitingForChoice = false;
+      
+      final now = DateTime.now().millisecondsSinceEpoch;
+      _targetEndTimeMillis = now + (_remainingSeconds * 1000);
+      
+      // Таймер уже запущен, продолжаем работу
+      _isRunning = true;
+      
+      notifyListeners();
+      _saveState();
       return;
     }
   }

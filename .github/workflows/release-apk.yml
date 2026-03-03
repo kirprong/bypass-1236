@@ -45,15 +45,15 @@ jobs:
       - name: Rename APK files
         working-directory: bypass-app/bypass-apk/build/app/outputs/flutter-apk
         run: |
-          mv app-armeabi-v7a-release.apk bypass-1236-armeabi-v7a.apk
-          mv app-arm64-v8a-release.apk bypass-1236-arm64-v8a.apk
-          mv app-x86_64-release.apk bypass-1236-x86_64.apk
+          mv app-armeabi-v7a-release.apk 1234-armeabi-v7a.apk
+          mv app-arm64-v8a-release.apk 1234-arm64-v8a.apk
+          mv app-x86_64-release.apk 1234-x86_64.apk
 
       - name: Create Release Notes
         id: release_notes
         run: |
           cat > release_notes.md << 'EOF'
-          ## 🎯 BYPASS-1236 Release
+          ## 🎯 1234 Release
           
           ### ✅ Основные возможности:
           - **Автоматические переходы 1→2→3** - непрерывный рывок на 6 минут
@@ -61,6 +61,8 @@ jobs:
           - **Dead Man's Switch** - защита от прокрастинации
           - **Режим ИНЕРЦИЯ** - продолжай когда вошел в поток
           - **Предупреждения** - звуковой сигнал за 6 секунд до конца фазы
+          - **🎲 Непредсказуемый отдых (1-4 мин)** - таймер скрыт, автоматический перезапуск
+          - **🔵 Глубокий синий для отдыха глаз** - пульсирующая анимация
           
           ### 📱 Какой APK выбрать:
           - **arm64-v8a** - для современных Android устройств (рекомендуется)
@@ -87,13 +89,13 @@ jobs:
         uses: softprops/action-gh-release@v1
         with:
           tag_name: ${{ github.event.inputs.version || github.ref_name }}
-          name: BYPASS-1236 ${{ github.event.inputs.version || github.ref_name }}
+          name: 1234 ${{ github.event.inputs.version || github.ref_name }}
           body_path: release_notes.md
           draft: false
           prerelease: false
           files: |
-            bypass-app/bypass-apk/build/app/outputs/flutter-apk/bypass-1236-armeabi-v7a.apk
-            bypass-app/bypass-apk/build/app/outputs/flutter-apk/bypass-1236-arm64-v8a.apk
-            bypass-app/bypass-apk/build/app/outputs/flutter-apk/bypass-1236-x86_64.apk
+            bypass-app/bypass-apk/build/app/outputs/flutter-apk/1234-armeabi-v7a.apk
+            bypass-app/bypass-apk/build/app/outputs/flutter-apk/1234-arm64-v8a.apk
+            bypass-app/bypass-apk/build/app/outputs/flutter-apk/1234-x86_64.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

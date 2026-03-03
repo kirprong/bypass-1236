@@ -45,7 +45,7 @@ jobs:
       - name: Upload APK artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: bypass-1236-apk
+          name: 1234-apk
           path: |
             bypass-app/bypass-apk/build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk
             bypass-app/bypass-apk/build/app/outputs/flutter-apk/app-arm64-v8a-release.apk
@@ -55,7 +55,7 @@ jobs:
       - name: Create Release Info
         working-directory: bypass-app/bypass-apk
         run: |
-          echo "# BYPASS-1236 Build Info" > build-info.txt
+          echo "# 1234 Build Info" > build-info.txt
           echo "Build Date: $(date)" >> build-info.txt
           echo "Commit: ${{ github.sha }}" >> build-info.txt
           echo "Branch: ${{ github.ref_name }}" >> build-info.txt

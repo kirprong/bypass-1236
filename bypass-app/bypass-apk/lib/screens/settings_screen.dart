@@ -52,10 +52,10 @@ class SettingsScreen extends StatelessWidget {
 
                   // О приложении
                   _buildSection('О приложении', [
-                    _buildInfoText('BYPASS-1236', isPrimary: true),
+                    _buildInfoText('1234', isPrimary: true),
                     const SizedBox(height: 5),
                     _buildInfoText(
-                      'Техника 1-2-3-6 для максимальной продуктивности',
+                      'Техника 1-2-3 для максимальной продуктивности',
                     ),
                     const SizedBox(height: 3),
                     _buildInfoText('Версия 1.0.0'),
