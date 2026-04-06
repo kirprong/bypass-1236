@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:just_audio/just_audio.dart';
 import '../utils/constants.dart';
@@ -10,6 +11,10 @@ class AudioService {
 
   final Map<String, AudioPlayer> _players = {};
   bool _isInitialized = false;
+  
+  // Плеер для зацикленного beep.mp3 (20 минут)
+  AudioPlayer? _loopingBeepPlayer;
+  Timer? _loopingBeepTimer;
 
   /// Инициализация аудио-сервиса
   Future<void> initialize() async {
@@ -178,9 +183,59 @@ class AudioService {
     }
   }
 
+  /// Запуск зацикленного beep.mp3 на 20 минут
+  Future<void> startLoopingBeep() async {
+    if (!_isInitialized) {
+      debugPrint('⚠️ AudioService not initialized - skipping looping beep');
+      return;
+    }
+
+    try {
+      // Останавливаем предыдущий если был
+      await stopLoopingBeep();
+      
+      debugPrint('🔊 Starting 20-minute looping beep...');
+      
+      // Создаем новый плеер для зацикленного beep
+      _loopingBeepPlayer = AudioPlayer();
+      await _loopingBeepPlayer!.setAsset(AppConstants.soundWarning);
+      await _loopingBeepPlayer!.setLoopMode(LoopMode.one); // Зацикливаем
+      await _loopingBeepPlayer!.setVolume(1.0);
+      await _loopingBeepPlayer!.play();
+      
+      debugPrint('✅ Looping beep started');
+      
+      // Таймер на 20 минут (1200 секунд)
+      _loopingBeepTimer = Timer(const Duration(minutes: 20), () {
+        debugPrint('⏰ 20 minutes elapsed, stopping looping beep');
+        stopLoopingBeep();
+      });
+    } catch (e) {
+      debugPrint('⚠️ Error starting looping beep: $e');
+    }
+  }
+  
+  /// Остановка зацикленного beep.mp3
+  Future<void> stopLoopingBeep() async {
+    try {
+      _loopingBeepTimer?.cancel();
+      _loopingBeepTimer = null;
+      
+      if (_loopingBeepPlayer != null) {
+        await _loopingBeepPlayer!.stop();
+        await _loopingBeepPlayer!.dispose();
+        _loopingBeepPlayer = null;
+        debugPrint('🔇 Looping beep stopped');
+      }
+    } catch (e) {
+      debugPrint('⚠️ Error stopping looping beep: $e');
+    }
+  }
+
   /// Освобождение ресурсов
   Future<void> dispose() async {
     try {
+      await stopLoopingBeep();
       for (final player in _players.values) {
         await player.dispose();
       }

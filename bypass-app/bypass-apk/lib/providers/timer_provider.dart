@@ -244,6 +244,7 @@ class TimerProvider with ChangeNotifier {
     _timer?.cancel();
     _targetEndTimeMillis = null;
     _inertiaStartTimeMillis = null;
+    _audioService.stopLoopingBeep(); // Останавливаем зацикленный beep при паузе
     WakelockPlus.disable();
     
     // Останавливаем foreground service
@@ -260,6 +261,7 @@ class TimerProvider with ChangeNotifier {
   void reset() {
     _timer?.cancel();
     _deadManSwitchTimer?.cancel();
+    _audioService.stopLoopingBeep(); // Останавливаем зацикленный beep
     _isRunning = false;
     _currentPhaseIndex = 0;
     _remainingSeconds = AppConstants.phase1Duration;
@@ -286,6 +288,7 @@ class TimerProvider with ChangeNotifier {
   void activateInertia() {
     if (_currentPhaseIndex == 2 && !_isInertiaMode && isPremium) {
       _stopDeadManSwitch(); // Останавливаем Dead Man's Switch
+      _audioService.stopLoopingBeep(); // Останавливаем зацикленный beep
       _isWaitingForChoice = false;
       _isInertiaMode = true;
       _inertiaSeconds = 0;
@@ -359,6 +362,7 @@ class TimerProvider with ChangeNotifier {
     if (_currentPhaseIndex != 2 || _isInertiaMode) return;
 
     _stopDeadManSwitch(); // Останавливаем Dead Man's Switch
+    _audioService.stopLoopingBeep(); // Останавливаем зацикленный beep
     _isWaitingForChoice = false;
 
     if (_statsProvider != null) {
@@ -398,8 +402,8 @@ class TimerProvider with ChangeNotifier {
       _targetEndTimeMillis = null;
       _needsTargetConfirmation = true;
 
-      // Играем длинный beep.mp3 перед вопросом
-      _audioService.playSound('WARNING'); // beep.mp3
+      // Запускаем зацикленный beep.mp3 на 20 минут
+      _audioService.startLoopingBeep();
       
       // Уведомление о подтверждении цели
       _notificationService.showSimpleNotification(
@@ -449,7 +453,8 @@ class TimerProvider with ChangeNotifier {
       _targetEndTimeMillis = null;
       _isWaitingForChoice = true;
 
-      // НЕТ звука окончания фазы 2 (по описанию)
+      // Запускаем зацикленный beep.mp3 на 20 минут
+      _audioService.startLoopingBeep();
       
       // Уведомление о выборе
       _notificationService.showSimpleNotification(
@@ -532,6 +537,7 @@ class TimerProvider with ChangeNotifier {
   void confirmTargetFound() {
     if (!_needsTargetConfirmation) return;
 
+    _audioService.stopLoopingBeep(); // Останавливаем зацикленный beep
     _needsTargetConfirmation = false;
     _currentPhaseIndex = 1; // PREP
     _remainingSeconds = AppConstants.phase2Duration;
@@ -558,6 +564,7 @@ class TimerProvider with ChangeNotifier {
   void confirmTargetNotFound() {
     if (!_needsTargetConfirmation) return;
 
+    _audioService.stopLoopingBeep(); // Останавливаем зацикленный beep
     _needsTargetConfirmation = false;
     
     // Уведомление о возврате к поиску
