@@ -13,6 +13,8 @@ class MainScreen extends StatefulWidget {
 class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateMixin {
   late AnimationController _pulseController;
   late Animation<double> _pulseAnimation;
+  late AnimationController _flashController;
+  late Animation<double> _flashAnimation;
 
   @override
   void initState() {
@@ -27,11 +29,22 @@ class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateM
     _pulseAnimation = Tween<double>(begin: 0.3, end: 1.0).animate(
       CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
     );
+    
+    // Контроллер для мигающей красной рамки (агрессивный)
+    _flashController = AnimationController(
+      duration: const Duration(milliseconds: 500),
+      vsync: this,
+    )..repeat(reverse: true);
+    
+    _flashAnimation = Tween<double>(begin: 0.3, end: 1.0).animate(
+      CurvedAnimation(parent: _flashController, curve: Curves.easeInOut),
+    );
   }
 
   @override
   void dispose() {
     _pulseController.dispose();
+    _flashController.dispose();
     super.dispose();
   }
 
@@ -100,6 +113,10 @@ class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateM
                     const SizedBox(height: 40),
                   ],
                 ),
+                
+                // Агрессивный оверлей подтверждения цели
+                if (timerProvider.needsTargetConfirmation)
+                  _buildTargetConfirmationOverlay(timerProvider),
               ],
             );
           },
@@ -354,6 +371,144 @@ class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateM
             ),
           );
         },
+      ),
+    );
+  }
+
+  /// Агрессивный оверлей подтверждения цели
+  Widget _buildTargetConfirmationOverlay(TimerProvider timer) {
+    return Positioned.fill(
+      child: AnimatedBuilder(
+        animation: _flashAnimation,
+        builder: (context, child) {
+          return Container(
+            color: Colors.black.withValues(alpha: 0.95),
+            child: Stack(
+              children: [
+                // Мигающая красная рамка
+                Positioned.fill(
+                  child: Container(
+                    decoration: BoxDecoration(
+                      border: Border.all(
+                        color: Colors.red.withValues(alpha: _flashAnimation.value),
+                        width: 8,
+                      ),
+                    ),
+                  ),
+                ),
+                
+                // Контент
+                Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      // Заголовок
+                      Text(
+                        'ЦЕЛЬ НАЙДЕНА?',
+                        style: TextStyle(
+                          fontSize: 48,
+                          fontWeight: FontWeight.w900,
+                          color: Colors.red.withValues(alpha: _flashAnimation.value),
+                          letterSpacing: 4,
+                          shadows: [
+                            Shadow(
+                              color: Colors.red.withValues(alpha: _flashAnimation.value * 0.8),
+                              blurRadius: 20,
+                            ),
+                          ],
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                      
+                      const SizedBox(height: 20),
+                      
+                      // Подзаголовок на английском
+                      Text(
+                        'TARGET ACQUIRED?',
+                        style: TextStyle(
+                          fontSize: 24,
+                          fontWeight: FontWeight.w700,
+                          color: Colors.red.withValues(alpha: _flashAnimation.value * 0.7),
+                          letterSpacing: 3,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                      
+                      const SizedBox(height: 80),
+                      
+                      // Кнопка ДА (Зеленая/Неоновая)
+                      _buildConfirmationButton(
+                        text: 'ДА\nОРУЖИЕ К БОЮ',
+                        color: const Color(0xFF00FF00),
+                        onTap: () => timer.confirmTargetFound(),
+                        icon: Icons.check_circle,
+                      ),
+                      
+                      const SizedBox(height: 30),
+                      
+                      // Кнопка НЕТ (Красная/Серая)
+                      _buildConfirmationButton(
+                        text: 'НЕТ\nНАЗАД К ПОИСКУ',
+                        color: const Color(0xFF666666),
+                        onTap: () => timer.confirmTargetNotFound(),
+                        icon: Icons.cancel,
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  /// Кнопка подтверждения для оверлея
+  Widget _buildConfirmationButton({
+    required String text,
+    required Color color,
+    required VoidCallback onTap,
+    required IconData icon,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: 320,
+        height: 100,
+        decoration: BoxDecoration(
+          color: color,
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [
+            BoxShadow(
+              color: color.withValues(alpha: 0.6),
+              blurRadius: 30,
+              spreadRadius: 5,
+            ),
+          ],
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              icon,
+              size: 40,
+              color: Colors.black,
+            ),
+            const SizedBox(width: 15),
+            Text(
+              text,
+              style: const TextStyle(
+                fontSize: 22,
+                fontWeight: FontWeight.w900,
+                color: Colors.black,
+                letterSpacing: 2,
+                height: 1.2,
+              ),
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
       ),
     );
   }

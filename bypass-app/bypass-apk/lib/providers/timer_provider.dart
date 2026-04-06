@@ -21,6 +21,7 @@ class TimerProvider with ChangeNotifier {
   int _inertiaSeconds = 0;
   bool _isWaitingForChoice = false; // Ожидание выбора после фазы 3
   bool _hasPlayedWarning = false; // Флаг для предупреждения
+  bool _needsTargetConfirmation = false; // Подтверждение цели после фазы 0
 
   // Временные метки для точности
   int? _targetEndTimeMillis;
@@ -37,6 +38,7 @@ class TimerProvider with ChangeNotifier {
   bool get isInertiaMode => _isInertiaMode;
   int get inertiaSeconds => _inertiaSeconds;
   bool get isWaitingForChoice => _isWaitingForChoice;
+  bool get needsTargetConfirmation => _needsTargetConfirmation;
 
   Color get currentPhaseColor => _isInertiaMode
       ? AppConstants.inertiaColor
@@ -79,6 +81,7 @@ class TimerProvider with ChangeNotifier {
       'remainingSeconds': _remainingSeconds,
       'inertiaSeconds': _inertiaSeconds,
       'isWaitingForChoice': _isWaitingForChoice,
+      'needsTargetConfirmation': _needsTargetConfirmation,
     };
     await prefs.setString('bypass_timer_state', jsonEncode(state));
   }
@@ -100,6 +103,7 @@ class TimerProvider with ChangeNotifier {
             AppConstants.getPhaseDuration(_currentPhaseIndex);
         _inertiaSeconds = state['inertiaSeconds'] ?? 0;
         _isWaitingForChoice = state['isWaitingForChoice'] ?? false;
+        _needsTargetConfirmation = state['needsTargetConfirmation'] ?? false;
 
         if (_isRunning) {
           final now = DateTime.now().millisecondsSinceEpoch;
@@ -264,6 +268,7 @@ class TimerProvider with ChangeNotifier {
     _targetEndTimeMillis = null;
     _inertiaStartTimeMillis = null;
     _isWaitingForChoice = false;
+    _needsTargetConfirmation = false;
     _hasPlayedWarning = false;
     WakelockPlus.disable();
     
@@ -324,7 +329,7 @@ class TimerProvider with ChangeNotifier {
     int baseRecoverySeconds = AppConstants.phase4MinDuration + 
         random.nextInt(AppConstants.phase4MaxDuration - AppConstants.phase4MinDuration + 1);
     
-    _remainingSeconds = baseRecoverySeconds + extraRestSeconds;
+      _remainingSeconds = baseRecoverySeconds + extraRestSeconds;
     
     debugPrint('🎲 RECOVERY после инерции: Базовая длительность = $baseRecoverySeconds сек, бонус = $extraRestSeconds сек');
 
@@ -333,6 +338,7 @@ class TimerProvider with ChangeNotifier {
     _inertiaStartTimeMillis = null;
     _inertiaSeconds = 0;
     _hasPlayedWarning = false;
+    _needsTargetConfirmation = false;
 
     _audioService.playPhaseSound(_currentPhaseIndex);
     
@@ -371,6 +377,7 @@ class TimerProvider with ChangeNotifier {
     final now = DateTime.now().millisecondsSinceEpoch;
     _targetEndTimeMillis = now + (_remainingSeconds * 1000);
     _hasPlayedWarning = false;
+    _needsTargetConfirmation = false;
 
     if (!_isRunning) {
       _isRunning = true;
@@ -384,7 +391,30 @@ class TimerProvider with ChangeNotifier {
 
   /// Завершение фазы (АВТОМАТИЧЕСКИЕ ПЕРЕХОДЫ 1→2→3)
   void _onPhaseComplete() {
-    // АВТОМАТИЧЕСКИЕ ПЕРЕХОДЫ: 1 → 2 → 3
+    // Фаза 0 (THINKING) завершена → ОСТАНАВЛИВАЕМ и показываем подтверждение цели
+    if (_currentPhaseIndex == 0) {
+      _isRunning = false;
+      _timer?.cancel();
+      _targetEndTimeMillis = null;
+      _needsTargetConfirmation = true;
+
+      // Играем длинный beep.mp3 перед вопросом
+      _audioService.playSound('WARNING'); // beep.mp3
+      
+      // Уведомление о подтверждении цели
+      _notificationService.showSimpleNotification(
+        title: '🎯 ЦЕЛЬ НАЙДЕНА?',
+        body: 'Подтвердите обнаружение цели',
+      );
+
+      debugPrint('TIMER: Фаза 0 завершена. Ожидание подтверждения цели');
+
+      notifyListeners();
+      _saveState();
+      return;
+    }
+    
+    // АВТОМАТИЧЕСКИЕ ПЕРЕХОДЫ: 1 → 2
     if (_currentPhaseIndex < 2) {
       // Фазы 0, 1 → автоматически переходят к следующей
       _currentPhaseIndex++;
@@ -454,6 +484,7 @@ class TimerProvider with ChangeNotifier {
       _remainingSeconds = AppConstants.phase1Duration;
       _hasPlayedWarning = false;
       _isWaitingForChoice = false;
+      _needsTargetConfirmation = false;
       
       final now = DateTime.now().millisecondsSinceEpoch;
       _targetEndTimeMillis = now + (_remainingSeconds * 1000);
@@ -495,6 +526,59 @@ class TimerProvider with ChangeNotifier {
   void _stopDeadManSwitch() {
     _deadManSwitchTimer?.cancel();
     _deadManSwitchTimer = null;
+  }
+
+  /// Подтверждение цели - ДА (переход к фазе 1)
+  void confirmTargetFound() {
+    if (!_needsTargetConfirmation) return;
+
+    _needsTargetConfirmation = false;
+    _currentPhaseIndex = 1; // PREP
+    _remainingSeconds = AppConstants.phase2Duration;
+    _hasPlayedWarning = false;
+
+    final now = DateTime.now().millisecondsSinceEpoch;
+    _targetEndTimeMillis = now + (_remainingSeconds * 1000);
+
+    _isRunning = true;
+    _audioService.playPhaseSound(_currentPhaseIndex); // bolt.mp3
+    
+    // Уведомление о переходе к подготовке
+    _notificationService.showSimpleNotification(
+      title: '✅ Цель подтверждена!',
+      body: 'ОРУЖИЕ К БОЮ - 2 минуты подготовки',
+    );
+
+    _startTimerLoop();
+    notifyListeners();
+    _saveState();
+  }
+
+  /// Подтверждение цели - НЕТ (возврат к началу)
+  void confirmTargetNotFound() {
+    if (!_needsTargetConfirmation) return;
+
+    _needsTargetConfirmation = false;
+    
+    // Уведомление о возврате к поиску
+    _notificationService.showSimpleNotification(
+      title: '🔄 Возврат к поиску',
+      body: 'Начинаем новый цикл поиска цели',
+    );
+    
+    // Полный сброс и автоматический запуск новой фазы 0
+    _currentPhaseIndex = 0;
+    _remainingSeconds = AppConstants.phase1Duration;
+    _hasPlayedWarning = false;
+    _isWaitingForChoice = false;
+
+    final now = DateTime.now().millisecondsSinceEpoch;
+    _targetEndTimeMillis = now + (_remainingSeconds * 1000);
+
+    _isRunning = true;
+    _startTimerLoop();
+    notifyListeners();
+    _saveState();
   }
 
   String formatTime(int seconds) {
