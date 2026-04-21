@@ -16,7 +16,7 @@ class StatsScreen extends StatelessWidget {
           builder: (context, statsProvider, child) {
             final currentRank = statsProvider.currentRank;
             final nextRank = statsProvider.nextRank;
-            
+
             return SingleChildScrollView(
               padding: const EdgeInsets.all(24),
               child: Column(
@@ -36,11 +36,11 @@ class StatsScreen extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(height: 40),
-                  
+
                   // Текущий ранг
                   _buildRankCard(currentRank, statsProvider.totalStrikes),
                   const SizedBox(height: 30),
-                  
+
                   // Прогресс до следующего ранга
                   if (nextRank != null)
                     _buildProgressToNextRank(
@@ -48,9 +48,9 @@ class StatsScreen extends StatelessWidget {
                       nextRank,
                       statsProvider.strikesToNextRank,
                     ),
-                  
+
                   const SizedBox(height: 40),
-                  
+
                   // Статистика
                   _buildStatCard(
                     'УДАРОВ НАНЕСЕНО',
@@ -59,7 +59,7 @@ class StatsScreen extends StatelessWidget {
                     'Завершенных циклов работы',
                   ),
                   const SizedBox(height: 20),
-                  
+
                   _buildStatCard(
                     'ВРЕМЯ ДОМИНИРОВАНИЯ',
                     '${statsProvider.totalDominationHours.toStringAsFixed(1)} ч',
@@ -67,7 +67,7 @@ class StatsScreen extends StatelessWidget {
                     'Общее время в продуктивной работе',
                   ),
                   const SizedBox(height: 20),
-                  
+
                   _buildStatCard(
                     'ВРЕМЯ ИНЕРЦИИ',
                     '${(statsProvider.totalInertiaTime / 60).toStringAsFixed(0)} мин',
@@ -75,7 +75,7 @@ class StatsScreen extends StatelessWidget {
                     'Дополнительное время в потоке',
                   ),
                   const SizedBox(height: 20),
-                  
+
                   if (!statsProvider.isPremium)
                     _buildStatCard(
                       'ЦИКЛЫ СЕГОДНЯ',
@@ -83,9 +83,9 @@ class StatsScreen extends StatelessWidget {
                       AppConstants.phase1Color,
                       'Лимит для бесплатной версии',
                     ),
-                  
+
                   const SizedBox(height: 40),
-                  
+
                   // Мотивационный текст
                   _buildMotivationalText(currentRank['name']),
                 ],
@@ -191,9 +191,12 @@ class StatsScreen extends StatelessWidget {
           ClipRRect(
             borderRadius: BorderRadius.circular(8),
             child: LinearProgressIndicator(
-              value: 1.0 - (strikesToNext / (nextRank['strikes'] - currentRank['strikes'])),
+              value: 1.0 -
+                  (strikesToNext /
+                      (nextRank['strikes'] - currentRank['strikes'])),
               minHeight: 8,
-              backgroundColor: AppConstants.textSecondaryColor.withValues(alpha: 0.2),
+              backgroundColor:
+                  AppConstants.textSecondaryColor.withValues(alpha: 0.2),
               valueColor: AlwaysStoppedAnimation<Color>(nextRank['color']),
             ),
           ),
@@ -211,7 +214,8 @@ class StatsScreen extends StatelessWidget {
   }
 
   /// Карточка статистики
-  Widget _buildStatCard(String title, String value, Color color, String subtitle) {
+  Widget _buildStatCard(
+      String title, String value, Color color, String subtitle) {
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
@@ -249,7 +253,8 @@ class StatsScreen extends StatelessWidget {
                   subtitle,
                   style: TextStyle(
                     fontSize: 10,
-                    color: AppConstants.textSecondaryColor.withValues(alpha: 0.6),
+                    color:
+                        AppConstants.textSecondaryColor.withValues(alpha: 0.6),
                   ),
                 ),
               ],
@@ -269,27 +274,59 @@ class StatsScreen extends StatelessWidget {
     );
   }
 
-  /// Мотивационный текст
   Widget _buildMotivationalText(String rank) {
     String text;
     switch (rank) {
-      case 'ПЛАНКТОН':
-        text = 'Ты в самом начале пути. Каждый удар приближает тебя к вершине.';
+      case 'ROOKIE':
+        text =
+            'You are at the beginning. Every strike brings you closer to the top.';
         break;
-      case 'БОЕЦ':
-        text = 'Ты начал двигаться. Продолжай атаковать свои цели.';
+      case 'RECRUIT':
+        text = 'You have been accepted. Now train harder.';
         break;
-      case 'ВОИН':
-        text = 'Твоя дисциплина растет. Ты уже не тот, кем был вчера.';
+      case 'SOLDIER':
+        text = 'You have learned to fight. Now learn to win.';
         break;
-      case 'ХИЩНИК':
-        text = 'Ты в топе. Твоя эффективность - это оружие массового поражения.';
+      case 'EXECUTOR':
+        text = 'You are an execution machine. Your targets have no chance.';
+        break;
+      case 'STRIKER':
+        text =
+            'Your strikes are precise. Every action is a step toward domination.';
+        break;
+      case 'DESTROYER':
+        text = 'You crush obstacles. Nothing can stand before you.';
+        break;
+      case 'PHANTOM':
+        text = 'You move like a shadow. Elusive, but deadly.';
+        break;
+      case 'TITAN':
+        text = 'You stand among giants. Your power is legendary.';
+        break;
+      case 'ARCHON':
+        text = 'You command your destiny. Your will is law.';
+        break;
+      case 'LEGEND':
+        text = 'Stories are told about you. Your name is a synonym for power.';
+        break;
+      case 'SLAYER':
+        text =
+            'You destroy targets without mercy. You are a machine of domination.';
+        break;
+      case 'WARLORD':
+        text = 'You lead armies of productivity. Your empire grows.';
+        break;
+      case 'OVERLORD':
+        text = 'Your productivity has reached sacred levels.';
         break;
       case 'APEX PREDATOR':
-        text = 'Ты достиг вершины пищевой цепи. Ты - машина доминирования.';
+        text = 'You have reached the top of the food chain. Few can match you.';
+        break;
+      case 'ULTIMATUM':
+        text = 'You are the final form. Absolute domination achieved.';
         break;
       default:
-        text = 'Продолжай работать. Результат неизбежен.';
+        text = 'Keep working. The result is inevitable.';
     }
 
     return Container(

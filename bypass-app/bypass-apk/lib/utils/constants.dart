@@ -26,7 +26,7 @@ class AppConstants {
   static const int phase1Duration = 60; // 1 минута - Анализ
   static const int phase2Duration = 120; // 2 минуты - Подготовка
   static const int phase3Duration = 180; // 3 минуты - Работа
-  
+
   // Фаза 4 (RECOVERY) - случайная длительность от 1 до 4 минут
   static const int phase4MinDuration = 60; // Минимум 1 минута
   static const int phase4MaxDuration = 240; // Максимум 4 минуты
@@ -73,20 +73,30 @@ class AppConstants {
       6; // Предупреждение за 6 секунд до конца фазы
   static const int deadManSwitchSeconds =
       30; // Dead Man's Switch таймаут после фазы 3
-  
+
   // Алиас для совместимости
   static int get deadManSwitchTimeout => deadManSwitchSeconds;
 
   // Лимиты для free версии
   static const int freeCyclesPerDay = 3;
 
-  // Ранги
+  // Ранги (геометрическая прогрессия, минимальный шаг 100)
   static const List<Map<String, dynamic>> ranks = [
-    {'name': 'ПЛАНКТОН', 'strikes': 0, 'color': Color(0xFF666666)},
-    {'name': 'EXECUTOR', 'strikes': 100, 'color': Color(0xFFFF0000)},
-    {'name': 'STRIKER', 'strikes': 200, 'color': Color(0xFFFF8A00)},
-    {'name': 'PHANTOM', 'strikes': 500, 'color': Color(0xFF6A0DAD)},
-    {'name': 'APEX PREDATOR', 'strikes': 1000, 'color': Color(0xFFFFD700)},
+    {'name': 'ROOKIE', 'strikes': 100, 'color': Color(0xFF4A4A4A)},
+    {'name': 'RECRUIT', 'strikes': 200, 'color': Color(0xFF5C6B5C)},
+    {'name': 'SOLDIER', 'strikes': 350, 'color': Color(0xFF6B8E23)},
+    {'name': 'EXECUTOR', 'strikes': 550, 'color': Color(0xFF2ECC71)},
+    {'name': 'STRIKER', 'strikes': 850, 'color': Color(0xFF1ABC9C)},
+    {'name': 'DESTROYER', 'strikes': 1300, 'color': Color(0xFFFF0000)},
+    {'name': 'PHANTOM', 'strikes': 2000, 'color': Color(0xFFFF4500)},
+    {'name': 'TITAN', 'strikes': 3000, 'color': Color(0xFFFF8A00)},
+    {'name': 'ARCHON', 'strikes': 4500, 'color': Color(0xFF8B00FF)},
+    {'name': 'LEGEND', 'strikes': 6700, 'color': Color(0xFF4169E1)},
+    {'name': 'SLAYER', 'strikes': 10000, 'color': Color(0xFF6A0DAD)},
+    {'name': 'WARLORD', 'strikes': 15000, 'color': Color(0xFFFF1493)},
+    {'name': 'OVERLORD', 'strikes': 22500, 'color': Color(0xFFDC143C)},
+    {'name': 'APEX PREDATOR', 'strikes': 33750, 'color': Color(0xFFC0C0C0)},
+    {'name': 'ULTIMATUM', 'strikes': 50000, 'color': Color(0xFFFFD700)},
   ];
 
   // Получить текущий ранг по количеству strikes
