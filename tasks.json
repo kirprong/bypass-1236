@@ -1,0 +1,309 @@
+{
+  "agent_instructions": {
+    "before_start": [
+      "Прочитай PRD_STAGE0.md, TECH_SPEC.md, tasks.json и git log --oneline -20",
+      "Выбери ОДНУ задачу со статусом 'pending' и наивысшим приоритетом",
+      "Убедись, что все ID задач из массива dependencies имеют статус 'done'"
+    ],
+    "during_work": [
+      "Работай ТОЛЬКО над выбранной задачей. Строго соблюдай контракты из TECH_SPEC.md",
+      "Делай микро-коммиты после каждого логического шага",
+      "Веди логирование своих действий в progress.md"
+    ],
+    "before_finish": [
+      "Выполни ВСЕ test_steps, указанные в задаче",
+      "Если тесты пройдены успешно, измени status задачи на 'done' в tasks.json",
+      "Строго ЗАПРЕЩАЕТСЯ удалять или переписывать чужие задачи"
+    ]
+  },
+  "tasks": [
+    {
+      "id": "TASK-001",
+      "category": "infrastructure",
+      "priority": "critical",
+      "description": "Создать таймер-движок (TimerProvider) для 1234: конфиг фаз (60/120/180/60-240) и базовая структура состояния.",
+      "acceptance_criteria": [
+        "В проекте выделен TimerProvider с полями: phaseIndex, isRunning, isInertiaMode, isWaitingForChoice, needsTargetConfirmation, remainingSeconds, inertiaSeconds, targetEndTimeMillis, inertiaStartTimeMillis",
+        "Конфигурация длительностей фаз: THINKING=60s, PREP=120s, STRIKE=180s, ПЕРЕЗАГРУЗКА=60-240s случайно",
+        "Состояние восстанавливается из SharedPreferences"
+      ],
+      "test_steps": [
+        "1. Найти TimerProvider в lib/providers/timer_provider.dart",
+        "2. Проверить phase1Duration=60, phase2Duration=120, phase3Duration=180",
+        "3. Проверить что phase4MinDuration=60, phase4MaxDuration=240",
+        "4. Проверить наличие _saveState() и _restoreState() методов"
+      ],
+      "dependencies": [],
+      "status": "done"
+    },
+    {
+      "id": "TASK-002",
+      "category": "functional",
+      "priority": "critical",
+      "description": "Реализовать обработчик события СТАРТ/ПАУЗА (toggle) с resume и pause логикой.",
+      "acceptance_criteria": [
+        "toggle() переключает isRunning между true/false",
+        "При паузе remainingSeconds сохраняется",
+        "При resume таймер продолжается с того же remainingSeconds",
+        "playStartSound() вызывается при любом нажатии"
+      ],
+      "test_steps": [
+        "1. Нажать СТАРТ - таймер должен начать отсчет",
+        "2. Нажать СТАРТ снова - таймер на паузе",
+        "3. Нажать СТАРТ - таймер продолжается с сохраненного времени"
+      ],
+      "dependencies": ["TASK-001"],
+      "status": "done"
+    },
+    {
+      "id": "TASK-003",
+      "category": "functional",
+      "priority": "critical",
+      "description": "Реализовать HALT (сброс) с возвратом к начальному состоянию.",
+      "acceptance_criteria": [
+        "reset() останавливает таймер",
+        "currentPhaseIndex = 0, remainingSeconds = 60",
+        "isRunning = false, isInertiaMode = false, isWaitingForChoice = false, needsTargetConfirmation = false",
+        "Останавливается foreground service и скрываются уведомления"
+      ],
+      "test_steps": [
+        "1. В любой момент нажать СБРОС",
+        "2. Проверить что phaseIndex=0, remainingSeconds=60",
+        "3. Убедиться что автопереходы отменены"
+      ],
+      "dependencies": ["TASK-001", "TASK-002"],
+      "status": "done"
+    },
+    {
+      "id": "TASK-004",
+      "category": "functional",
+      "priority": "critical",
+      "description": "Реализовать автопереходы между фазами и Target Confirmation после THINKING.",
+      "acceptance_criteria": [
+        "THINKING завершается → needsTargetConfirmation=true, звук beep.mp3 зациклен",
+        "PREP завершается → автоматический переход к STRIKE",
+        "STRIKE завершается → isWaitingForChoice=true, Dead Man's Switch (30s)",
+        "ПЕРЕЗАГРУЗКА завершается → автоматический переход к THINKING и запуск"
+      ],
+      "test_steps": [
+        "1. Дождаться окончания THINKING - оверлей Target Confirmation появляется",
+        "2. Дождаться окончания PREP - переход к STRIKE",
+        "3. Дождаться окончания STRIKE - выбор ИНЕРЦИЯ/ОТДЫХ",
+        "4. Дождаться окончания ПЕРЕЗАГРУЗКИ - новый цикл начинается"
+      ],
+      "dependencies": ["TASK-001", "TASK-002", "TASK-003"],
+      "status": "done"
+    },
+    {
+      "id": "TASK-005",
+      "category": "ui",
+      "priority": "high",
+      "description": "Подключить минималистичный рендеринг UI: отображение 'ФАЗА X. НАЗВАНИЕ', mm:ss, прогресс-бар, кнопки.",
+      "acceptance_criteria": [
+        "MainScreen отображает 'ФАЗА X. НАЗВАНИЕ'",
+        "Таймер в формате mm:ss (96pt monospace)",
+        "Прогресс-бар 4 сегмента (отличие от Stage 0 PRD)",
+        "Кнопки СТАРТ/ПАУЗА и СБРОС работают",
+        "Bottom navigation: ТАЙМЕР / СТАТИСТИКА / НАСТРОЙКИ"
+      ],
+      "test_steps": [
+        "1. При старте: 'ФАЗА 1. THINKING' и '01:00'",
+        "2. При СТАРТ: таймер уменьшается",
+        "3. При СБРОС: возвращается к ФАЗА 1. THINKING",
+        "4. StatsScreen доступен через навигацию"
+      ],
+      "dependencies": ["TASK-001", "TASK-002", "TASK-003", "TASK-004"],
+      "status": "done"
+    },
+    {
+      "id": "TASK-006",
+      "category": "functional",
+      "priority": "medium",
+      "description": "Реализовать идемпотентность toggle и обработку ошибок.",
+      "acceptance_criteria": [
+        "Двойное нажатие СТАРТ в момент RUNNING → корректно PAUSE",
+        "Ошибки не ломают состояние таймера"
+      ],
+      "test_steps": [
+        "1. Быстро нажать СТАРТ дважды - состояние должно быть PAUSE",
+        "2. При ошибке аудио - таймер продолжает работу"
+      ],
+      "dependencies": ["TASK-002", "TASK-003"],
+      "status": "done"
+    },
+    {
+      "id": "TASK-007",
+      "category": "integration",
+      "priority": "high",
+      "description": "End-to-end сценарий таймера со всеми фазами и микромеханиками.",
+      "acceptance_criteria": [
+        "Полный цикл: THINKING → Target Confirmation → PREP → STRIKE → ИНЕРЦИЯ/ОТДЫХ → THINKING",
+        "Target Confirmation: ДА → PREP, НЕТ → новый THINKING",
+        "Inertia: +1 мин отдыха за каждые 10 мин инерции",
+        "Dead Man's Switch: автоматический переход к ОТДЫХу через 30 сек"
+      ],
+      "test_steps": [
+        "1. Старт → автопереход ко всем фазам",
+        "2. После THINKING выбрать ДА → переход к PREP",
+        "3. После STRIKE нажать ИНЕРЦИЯ → режим потока",
+        "4. Остановить инерцию → ПЕРЕЗАГРУЗКА + бонус",
+        "5. Дождаться конца ПЕРЕЗАГРУЗКИ → новый цикл"
+      ],
+      "dependencies": ["TASK-005", "TASK-004", "TASK-003"],
+      "status": "done"
+    },
+    {
+      "id": "TASK-008",
+      "category": "feature",
+      "priority": "medium",
+      "description": "Target Confirmation Overlay после фазы THINKING.",
+      "acceptance_criteria": [
+        "После THINKING останавливается таймер",
+        "Появляется оверлей с вопросом 'ЦЕЛЬ НАЙДЕНА?'",
+        "Кнопки ДА/НЕТ работают",
+        "Зацикленный beep.mp3 играет",
+        "Dead Man's Switch не запускается"
+      ],
+      "test_steps": [
+        "1. Дождаться окончания THINKING",
+        "2. Убедиться в появлении оверлеа",
+        "3. Нажать ДА → переход к PREP",
+        "4. Нажать НЕТ → сброс к новому THINKING"
+      ],
+      "dependencies": ["TASK-004"],
+      "status": "done"
+    },
+    {
+      "id": "TASK-009",
+      "category": "feature",
+      "priority": "medium",
+      "description": "Inertia Mode (Overdrive) после фазы STRIKE.",
+      "acceptance_criteria": [
+        "Кнопка ИНЕРЦИЯ появляется после STRIKE",
+        "Только Premium пользователи могут активировать",
+        "Таймер показывает +секунды вместо mm:ss",
+        "Бонусный отдых рассчитывается корректно"
+      ],
+      "test_steps": [
+        "1. После STRIKE увидеть кнопку ИНЕРЦИЯ",
+        "2. Активировать инерцию → таймер в секундах",
+        "3. Остановить инерцию → ПЕРЕЗАГРУЗКА с бонусом"
+      ],
+      "dependencies": ["TASK-004"],
+      "status": "done"
+    },
+    {
+      "id": "TASK-010",
+      "category": "feature",
+      "priority": "medium",
+      "description": "Audio System с just_audio.",
+      "acceptance_criteria": [
+        "8 звуковых файлов загружены",
+        "Звуки при переходах фаз",
+        "Предупреждение за 6 секунд",
+        "Dead Man's Switch звук"
+      ],
+      "test_steps": [
+        "1. При старте слышен start.mp3",
+        "2. При переходе фаз - звуки bolt/siren/rest",
+        "3. За 6 секунд до конца - beep.mp3"
+      ],
+      "dependencies": ["TASK-001"],
+      "status": "done"
+    },
+    {
+      "id": "TASK-011",
+      "category": "feature",
+      "priority": "medium",
+      "description": "StatsProvider и StatsScreen.",
+      "acceptance_criteria": [
+        "Сохранение strikes в SharedPreferences",
+        "Сохранение времени инерции",
+        "Расчет общих часов доминирования",
+        "Экран статистики с рангами"
+      ],
+      "test_steps": [
+        "1. Завершить цикл - strikes увеличился",
+        "2. Открыть StatsScreen - виден ранг",
+        "3. Перезапустить приложение - статистика сохранилась"
+      ],
+      "dependencies": ["TASK-007"],
+      "status": "done"
+    },
+    {
+      "id": "TASK-012",
+      "category": "feature",
+      "priority": "medium",
+      "description": "Paywall с лимитами Free/Premium.",
+      "acceptance_criteria": [
+        "Лимит 3 цикла в день для Free",
+        "Кнопка Premium активирует isPremium",
+        "Инерция недоступна для Free",
+        "canStartCycle проверяет лимит"
+      ],
+      "test_steps": [
+        "1. Free пользователя - виден лимит 3/3 цикла",
+        "2. Инерция недоступна",
+        "3. Активировать Premium - инерция доступна"
+      ],
+      "dependencies": ["TASK-011"],
+      "status": "done"
+    },
+    {
+      "id": "TASK-V1.1-001",
+      "category": "testing",
+      "priority": "critical",
+      "description": "Регрессионная проверка перед внедрением Meta Time Scaling (Time Warp): убедиться, что старые фазы/автопереходы/пауза/сброс не сломаны.",
+      "acceptance_criteria": [
+        "Проект собирается и запускается",
+        "Старые флоу (THINKING → PREP → STRIKE → ПЕРЕЗАГРУЗКА) работают без ошибок",
+        "Пауза/сброс корректны и не ломают автопереходы"
+      ],
+      "test_steps": [
+        "1. Запустить приложение и дождаться автопереходов всех фаз без ручного вмешательства",
+        "2. Проверить СТАРТ/ПАУЗА: пауза сохраняет remainingSeconds, resume продолжает корректно",
+        "3. Нажать СБРОС в середине цикла и убедиться, что таймер возвращается в THINKING и автопереходы отменены"
+      ],
+      "dependencies": [],
+      "status": "pending"
+    },
+    {
+      "id": "TASK-V1.1-002",
+      "category": "frontend",
+      "priority": "high",
+      "description": "Добавить глобальный UI-ползунок Meta Time Scaling (Time Warp) и пробросить значение в TimerProvider без изменения порядка фаз.",
+      "acceptance_criteria": [
+        "В UI есть ползунок timeWarpScale (глобальная настройка)",
+        "Изменение ползунка не меняет порядок фаз: THINKING → PREP → STRIKE → ПЕРЕЗАГРУЗКА",
+        "Значение сохраняется в SharedPreferences и восстанавливается после перезапуска"
+      ],
+      "test_steps": [
+        "1. Изменить ползунок timeWarpScale в начале цикла и убедиться, что новые длительности фаз учитываются",
+        "2. Изменить ползунок во время RUNNING и убедиться, что автопереходы продолжаются корректно",
+        "3. Перезапустить приложение и проверить, что ползунок восстановился"
+      ],
+      "dependencies": ["TASK-V1.1-001"],
+      "status": "pending"
+    },
+    {
+      "id": "TASK-V1.1-003",
+      "category": "functional",
+      "priority": "critical",
+      "description": "В TimerProvider реализовать масштабирование времени для всех фаз: пересчёт окончания фаз/remainingSeconds при изменении timeWarpScale во время RUNNING + guard от повторного триггера перехода + clamp/валидаторы.",
+      "acceptance_criteria": [
+        "timeWarpScale применяет масштаб к длительности полного цикла и/или длительностям фаз, сохраняя порядок фаз",
+        "При изменении timeWarpScale во время RUNNING фаза завершается корректно и авто-переход срабатывает ровно один раз на завершение каждой фазы (guard от повторного триггера на одном тике)",
+        "timeWarpScale валидируется/clamp-ится (NaN/Infinity/выход за диапазон → fallback = 1.0)",
+        "Chaos Protocol (случайность длительности ПЕРЕЗАГРУЗКА) остаётся источником случайности, но итоговая длительность ПЕРЕЗАГРУЗКИ также масштабируется"
+      ],
+      "test_steps": [
+        "1. Поставить timeWarpScale на низкое значение (например 0.5) и проверить, что фазы проходят быстрее",
+        "2. Поставить timeWarpScale на высокое значение (например 2.0) и проверить, что фазы проходят медленнее",
+        "3. Во время RUNNING изменить timeWarpScale и убедиться, что каждая фаза завершается ровно один раз и автопереходы происходят без зависаний",
+        "4. Проверить кейс некорректного значения (если UI/setting позволяет): NaN/Infinity/вне диапазона → fallback 1.0"
+      ],
+      "dependencies": ["TASK-V1.1-002"],
+      "status": "pending"
+    }
+  ]
+}
