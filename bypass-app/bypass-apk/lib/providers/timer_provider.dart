@@ -19,9 +19,11 @@ class TimerProvider with ChangeNotifier {
   bool _isRunning = false;
   bool _isInertiaMode = false;
   int _inertiaSeconds = 0;
-  bool _isWaitingForChoice = false; // Ожидание выбора после фазы 3
-  bool _hasPlayedWarning = false; // Флаг для предупреждения
-  bool _needsTargetConfirmation = false; // Подтверждение цели после фазы 0
+  bool _isWaitingForChoice = false;
+  bool _hasPlayedWarning = false;
+  bool _needsTargetConfirmation = false;
+  double _timeWarpScale = AppConstants.timeWarpDefault; // Глобальный масштаб времени
+  bool _phaseCompleted = false; // Guard от повторного триггера перехода фазы
 
   // Временные метки для точности
   int? _targetEndTimeMillis;
@@ -39,6 +41,7 @@ class TimerProvider with ChangeNotifier {
   int get inertiaSeconds => _inertiaSeconds;
   bool get isWaitingForChoice => _isWaitingForChoice;
   bool get needsTargetConfirmation => _needsTargetConfirmation;
+  double get timeWarpScale => _timeWarpScale;
 
   Color get currentPhaseColor => _isInertiaMode
       ? AppConstants.inertiaColor
@@ -59,6 +62,18 @@ class TimerProvider with ChangeNotifier {
 
   void setStatsProvider(StatsProvider statsProvider) {
     _statsProvider = statsProvider;
+  }
+
+  void setTimeWarpScale(double scale) {
+    _timeWarpScale = scale.clamp(AppConstants.timeWarpMin, AppConstants.timeWarpMax);
+    _saveState();
+    notifyListeners();
+  }
+
+  int _getScaledPhaseDuration(int phaseIndex, [int? baseSeconds]) {
+    final base = baseSeconds ?? AppConstants.getPhaseDuration(phaseIndex);
+    final scaled = (base * _timeWarpScale).round();
+    return scaled < 1 ? 1 : scaled;
   }
 
   /// Инициализация: восстановление состояния
@@ -82,6 +97,7 @@ class TimerProvider with ChangeNotifier {
       'inertiaSeconds': _inertiaSeconds,
       'isWaitingForChoice': _isWaitingForChoice,
       'needsTargetConfirmation': _needsTargetConfirmation,
+      'timeWarpScale': _timeWarpScale,
     };
     await prefs.setString('bypass_timer_state', jsonEncode(state));
   }
@@ -104,6 +120,10 @@ class TimerProvider with ChangeNotifier {
         _inertiaSeconds = state['inertiaSeconds'] ?? 0;
         _isWaitingForChoice = state['isWaitingForChoice'] ?? false;
         _needsTargetConfirmation = state['needsTargetConfirmation'] ?? false;
+        _timeWarpScale = (state['timeWarpScale'] as num?)?.toDouble() ?? AppConstants.timeWarpDefault;
+        if (_timeWarpScale.isNaN || _timeWarpScale.isInfinite) {
+          _timeWarpScale = AppConstants.timeWarpDefault;
+        }
 
         if (_isRunning) {
           final now = DateTime.now().millisecondsSinceEpoch;
@@ -134,7 +154,8 @@ class TimerProvider with ChangeNotifier {
   void _startTimerLoop() {
     _timer?.cancel();
     WakelockPlus.enable();
-    _hasPlayedWarning = false; // Сброс флага предупреждения
+    _hasPlayedWarning = false;
+    _phaseCompleted = false; // Сброс guard при старте цикла
     
     // Показываем уведомление при старте таймера
     _updateNotification();
@@ -154,17 +175,19 @@ class TimerProvider with ChangeNotifier {
           if (remaining == AppConstants.warningBeforeEndSeconds &&
               !_hasPlayedWarning &&
               _currentPhaseIndex != 2) {
-            _audioService.playWarningSound(); // finish.mp3
+            _audioService.playWarningSound();
             _hasPlayedWarning = true;
             debugPrint(
               'TIMER: Предупреждение за 6 секунд до конца фазы $_currentPhaseIndex',
             );
           }
 
-          if (remaining <= 0) {
+          // Guard от повторного триггера перехода фазы
+          if (remaining <= 0 && !_phaseCompleted) {
+            _phaseCompleted = true;
             _remainingSeconds = 0;
             _onPhaseComplete();
-          } else {
+          } else if (remaining > 0) {
             _remainingSeconds = remaining;
           }
         }
@@ -261,10 +284,10 @@ class TimerProvider with ChangeNotifier {
   void reset() {
     _timer?.cancel();
     _deadManSwitchTimer?.cancel();
-    _audioService.stopLoopingBeep(); // Останавливаем зацикленный beep
+    _audioService.stopLoopingBeep();
     _isRunning = false;
     _currentPhaseIndex = 0;
-    _remainingSeconds = AppConstants.phase1Duration;
+    _remainingSeconds = _getScaledPhaseDuration(0, AppConstants.phase1Duration);
     _isInertiaMode = false;
     _inertiaSeconds = 0;
     _targetEndTimeMillis = null;
@@ -272,12 +295,10 @@ class TimerProvider with ChangeNotifier {
     _isWaitingForChoice = false;
     _needsTargetConfirmation = false;
     _hasPlayedWarning = false;
+    _phaseCompleted = false;
     WakelockPlus.disable();
     
-    // Останавливаем foreground service
     ForegroundService.stop();
-    
-    // Скрываем уведомление при сбросе
     _notificationService.hideNotification();
     
     notifyListeners();
@@ -312,29 +333,27 @@ class TimerProvider with ChangeNotifier {
     }
   }
 
-  /// Остановка инерции и переход к отдыху
+/// Остановка инерции и переход к отдыху
   void stopInertia() {
     if (!_isInertiaMode) return;
 
     if (_statsProvider != null) {
       _statsProvider!.addInertiaTime(_inertiaSeconds);
-      _statsProvider!.addStrike(); // Считаем за завершенный страйк
+      _statsProvider!.addStrike();
     }
 
     _isInertiaMode = false;
-    _currentPhaseIndex = 3; // RECOVERY
+    _currentPhaseIndex = 3;
 
-    // Формула из оригинала: 1 минута за каждые 10 минут переработки
     int extraRestSeconds = (_inertiaSeconds / 600).floor() * 60;
-    
-    // Генерируем случайную базовую длительность от 1 до 4 минут
+
     final random = Random();
-    int baseRecoverySeconds = AppConstants.phase4MinDuration + 
+    int baseRecoverySeconds = AppConstants.phase4MinDuration +
         random.nextInt(AppConstants.phase4MaxDuration - AppConstants.phase4MinDuration + 1);
-    
-      _remainingSeconds = baseRecoverySeconds + extraRestSeconds;
-    
-    debugPrint('🎲 RECOVERY после инерции: Базовая длительность = $baseRecoverySeconds сек, бонус = $extraRestSeconds сек');
+
+    _remainingSeconds = _getScaledPhaseDuration(3, baseRecoverySeconds + extraRestSeconds);
+
+    debugPrint('🎲 RECOVERY после инерции: Базовая = $baseRecoverySeconds сек, бонус = $extraRestSeconds сек, scaled = $_remainingSeconds сек');
 
     final now = DateTime.now().millisecondsSinceEpoch;
     _targetEndTimeMillis = now + (_remainingSeconds * 1000);
@@ -342,17 +361,17 @@ class TimerProvider with ChangeNotifier {
     _inertiaSeconds = 0;
     _hasPlayedWarning = false;
     _needsTargetConfirmation = false;
+    _phaseCompleted = false;
 
     _audioService.playPhaseSound(_currentPhaseIndex);
-    
-    // Уведомление о дополнительном отдыхе
+
     if (extraRestSeconds > 0) {
       _notificationService.showSimpleNotification(
         title: '🎁 Бонусный отдых!',
         body: 'Получено +${extraRestSeconds ~/ 60} мин отдыха за инерцию',
       );
     }
-    
+
     notifyListeners();
     _saveState();
   }
@@ -361,27 +380,29 @@ class TimerProvider with ChangeNotifier {
   void startRecovery() {
     if (_currentPhaseIndex != 2 || _isInertiaMode) return;
 
-    _stopDeadManSwitch(); // Останавливаем Dead Man's Switch
-    _audioService.stopLoopingBeep(); // Останавливаем зацикленный beep
+    _stopDeadManSwitch();
+    _audioService.stopLoopingBeep();
     _isWaitingForChoice = false;
 
     if (_statsProvider != null) {
       _statsProvider!.addStrike();
     }
 
-    _currentPhaseIndex = 3; // RECOVERY
-    
-    // Генерируем случайную длительность от 1 до 4 минут
+    _currentPhaseIndex = 3;
+
     final random = Random();
-    _remainingSeconds = AppConstants.phase4MinDuration + 
+    int baseRecoverySeconds = AppConstants.phase4MinDuration +
         random.nextInt(AppConstants.phase4MaxDuration - AppConstants.phase4MinDuration + 1);
-    
-    debugPrint('🎲 RECOVERY: Случайная длительность = $_remainingSeconds сек (${_remainingSeconds ~/ 60} мин)');
+
+    _remainingSeconds = _getScaledPhaseDuration(3, baseRecoverySeconds);
+
+    debugPrint('🎲 RECOVERY: Случайная длительность = $baseRecoverySeconds сек, scaled = $_remainingSeconds сек (${_remainingSeconds ~/ 60} мин)');
 
     final now = DateTime.now().millisecondsSinceEpoch;
     _targetEndTimeMillis = now + (_remainingSeconds * 1000);
     _hasPlayedWarning = false;
     _needsTargetConfirmation = false;
+    _phaseCompleted = false;
 
     if (!_isRunning) {
       _isRunning = true;
@@ -420,18 +441,16 @@ class TimerProvider with ChangeNotifier {
     
     // АВТОМАТИЧЕСКИЕ ПЕРЕХОДЫ: 1 → 2
     if (_currentPhaseIndex < 2) {
-      // Фазы 0, 1 → автоматически переходят к следующей
       _currentPhaseIndex++;
-      _remainingSeconds = AppConstants.getPhaseDuration(_currentPhaseIndex);
+      _remainingSeconds = _getScaledPhaseDuration(_currentPhaseIndex);
       _hasPlayedWarning = false;
+      _phaseCompleted = false;
 
       final now = DateTime.now().millisecondsSinceEpoch;
       _targetEndTimeMillis = now + (_remainingSeconds * 1000);
 
-      // Звуки при переходах
       _audioService.playPhaseSound(_currentPhaseIndex);
-      
-      // Показываем уведомление о смене фазы
+
       _notificationService.showSimpleNotification(
         title: '🎯 Новая фаза: ${AppConstants.getPhaseName(_currentPhaseIndex)}',
         body: currentPhaseText,
@@ -474,29 +493,27 @@ class TimerProvider with ChangeNotifier {
 
     // Фаза 3 (RECOVERY) завершена → автоматический переход к фазе 1
     if (_currentPhaseIndex == 3) {
-      _audioService.playCycleEndSound(); // scan.mp3 - конец отдыха
-      
-      // Уведомление о завершении цикла
+      _audioService.playCycleEndSound();
+
       _notificationService.showSimpleNotification(
         title: '✅ Цикл завершён! Начинается новый',
         body: 'Автоматический переход к THINKING',
       );
-      
+
       debugPrint('TIMER: Цикл завершён. Автоматический переход к фазе 1.');
-      
-      // Автоматически переходим к фазе 1 и запускаем таймер
+
       _currentPhaseIndex = 0;
-      _remainingSeconds = AppConstants.phase1Duration;
+      _remainingSeconds = _getScaledPhaseDuration(0, AppConstants.phase1Duration);
       _hasPlayedWarning = false;
       _isWaitingForChoice = false;
       _needsTargetConfirmation = false;
-      
+      _phaseCompleted = false;
+
       final now = DateTime.now().millisecondsSinceEpoch;
       _targetEndTimeMillis = now + (_remainingSeconds * 1000);
-      
-      // Таймер уже запущен, продолжаем работу
+
       _isRunning = true;
-      
+
       notifyListeners();
       _saveState();
       return;
@@ -537,19 +554,19 @@ class TimerProvider with ChangeNotifier {
   void confirmTargetFound() {
     if (!_needsTargetConfirmation) return;
 
-    _audioService.stopLoopingBeep(); // Останавливаем зацикленный beep
+    _audioService.stopLoopingBeep();
     _needsTargetConfirmation = false;
-    _currentPhaseIndex = 1; // PREP
-    _remainingSeconds = AppConstants.phase2Duration;
+    _currentPhaseIndex = 1;
+    _remainingSeconds = _getScaledPhaseDuration(1, AppConstants.phase2Duration);
     _hasPlayedWarning = false;
+    _phaseCompleted = false;
 
     final now = DateTime.now().millisecondsSinceEpoch;
     _targetEndTimeMillis = now + (_remainingSeconds * 1000);
 
     _isRunning = true;
-    _audioService.playPhaseSound(_currentPhaseIndex); // bolt.mp3
-    
-    // Уведомление о переходе к подготовке
+    _audioService.playPhaseSound(_currentPhaseIndex);
+
     _notificationService.showSimpleNotification(
       title: '✅ Цель подтверждена!',
       body: 'ОРУЖИЕ К БОЮ - 2 минуты подготовки',
@@ -564,20 +581,19 @@ class TimerProvider with ChangeNotifier {
   void confirmTargetNotFound() {
     if (!_needsTargetConfirmation) return;
 
-    _audioService.stopLoopingBeep(); // Останавливаем зацикленный beep
+    _audioService.stopLoopingBeep();
     _needsTargetConfirmation = false;
-    
-    // Уведомление о возврате к поиску
+
     _notificationService.showSimpleNotification(
       title: '🔄 Возврат к поиску',
       body: 'Начинаем новый цикл поиска цели',
     );
-    
-    // Полный сброс и автоматический запуск новой фазы 0
+
     _currentPhaseIndex = 0;
-    _remainingSeconds = AppConstants.phase1Duration;
+    _remainingSeconds = _getScaledPhaseDuration(0, AppConstants.phase1Duration);
     _hasPlayedWarning = false;
     _isWaitingForChoice = false;
+    _phaseCompleted = false;
 
     final now = DateTime.now().millisecondsSinceEpoch;
     _targetEndTimeMillis = now + (_remainingSeconds * 1000);
@@ -596,7 +612,7 @@ class TimerProvider with ChangeNotifier {
 
   double get progress {
     if (_isInertiaMode) return 1.0;
-    int total = AppConstants.getPhaseDuration(_currentPhaseIndex);
+    int total = _getScaledPhaseDuration(_currentPhaseIndex);
     if (total == 0) return 0.0;
     return 1.0 - (_remainingSeconds / total).clamp(0.0, 1.0);
   }

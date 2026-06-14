@@ -2,6 +2,11 @@ import 'package:flutter/material.dart';
 
 /// Константы приложения 1234
 class AppConstants {
+  // Time Warp Scale диапазон
+  static const double timeWarpMin = 0.5;
+  static const double timeWarpMax = 2.0;
+  static const double timeWarpDefault = 1.0;
+
   // Цвета фаз (неоновые акценты на черном фоне)
   static const Color phase1Color = Color(
     0xFF00D4FF,

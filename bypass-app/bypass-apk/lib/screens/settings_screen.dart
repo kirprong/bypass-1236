@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../providers/timer_provider.dart';
 import '../providers/stats_provider.dart';
 import '../utils/constants.dart';
 import 'paywall_screen.dart';
@@ -46,6 +47,13 @@ class SettingsScreen extends StatelessWidget {
 
                     // Тестовая кнопка переключения премиум
                     _buildTestButton(context, statsProvider),
+                  ]),
+
+                  const SizedBox(height: 30),
+
+                  // Time Warp Scale
+                  _buildSection('Time Warp Scale', [
+                    _buildTimeWarpSlider(),
                   ]),
 
                   const SizedBox(height: 30),
@@ -259,18 +267,70 @@ class SettingsScreen extends StatelessWidget {
               size: 20,
             ),
             const SizedBox(width: 10),
-            Text(
-              'ПОЛНАЯ МЕТОДИКА',
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.bold,
-                color: AppConstants.phase1Color,
-                letterSpacing: 1.5,
+Text(
+               'ПОЛНАЯ МЕТОДИКА',
+               style: TextStyle(
+                 fontSize: 16,
+                 fontWeight: FontWeight.bold,
+                 color: AppConstants.phase1Color,
+                 letterSpacing: 1.5,
+               ),
+             ),
+           ],
+         ),
+       ),
+     );
+  }
+
+  Widget _buildTimeWarpSlider() {
+    return Consumer<TimerProvider>(
+      builder: (context, timerProvider, child) {
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            SliderTheme(
+              data: SliderThemeData(
+                activeTrackColor: AppConstants.phase1Color,
+                inactiveTrackColor: const Color(0xFF333333),
+                thumbColor: AppConstants.phase1Color,
+                overlayColor: AppConstants.phase1Color.withValues(alpha: 0.2),
+              ),
+              child: Slider(
+                value: timerProvider.timeWarpScale,
+                min: AppConstants.timeWarpMin,
+                max: AppConstants.timeWarpMax,
+                divisions: 15,
+                label: 'x${timerProvider.timeWarpScale.toStringAsFixed(1)}',
+                onChanged: (value) {
+                  timerProvider.setTimeWarpScale(value);
+                },
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    'x${AppConstants.timeWarpMin.toStringAsFixed(1)} (быстрее)',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: AppConstants.textSecondaryColor,
+                    ),
+                  ),
+                  Text(
+                    'x${AppConstants.timeWarpMax.toStringAsFixed(1)} (медленнее)',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: AppConstants.textSecondaryColor,
+                    ),
+                  ),
+                ],
               ),
             ),
           ],
-        ),
-      ),
+        );
+      },
     );
   }
 }
