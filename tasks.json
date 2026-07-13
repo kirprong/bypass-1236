@@ -304,6 +304,118 @@
       ],
       "dependencies": ["TASK-V1.1-002"],
       "status": "pending"
+    },
+    {
+      "id": "TASK-V1.1-005",
+      "category": "database",
+      "priority": "critical",
+      "description": "Добавить и мигрировать новые SharedPreferences ключи для устойчивости INERTIA после перезапуска (pulse deadline, счетчик циклов, confirm-window, guard-флаг lastInertiaPhaseTransitionId).",
+      "acceptance_criteria": [
+        "Backward compatibility: при отсутствии новых ключей используется безопасный default (inertiaCycleCount=0, inertiaNextPulseAtMillis=null и т.д.)",
+        "После перезапуска приложения INERTIA продолжается: следующий pulse и/или overlay MAX FLOW отрабатывают в правильные окна времени",
+        "Confirm overlay восстанавливается/отрабатывает корректно при наличии pending confirm deadline"
+      ],
+      "test_steps": [
+        "1. Войти в INERTIA и перезапустить приложение во время ожидания ближайшего pulse",
+        "2. Проверить, что следующий pulse происходит один раз и лежит в заданном диапазоне 3–6 минут",
+        "3. Дойти до ситуации MAX FLOW confirm-window (6-й инерционный цикл) и перезапустить во время окна; затем проверить появление overlay и таймаут 30 секунд"
+      ],
+      "dependencies": ["TASK-V1.1-004"],
+      "status": "pending"
+    },
+    {
+      "id": "TASK-V1.1-006",
+      "category": "refactoring",
+      "priority": "critical",
+      "description": "State machine pivot: убрать ветвление после STRIKE (INERTIA/ОТДЫХ) и сделать авто-вход в INERTIA с идемпотентным guard от повторного триггера на одном завершении STRIKE.",
+      "acceptance_criteria": [
+        "После завершения STRIKE включается isInertiaMode=true автоматически",
+        "Нет ветки UI выбора инерции/отдыха после STRIKE",
+        "Guard корректно предотвращает повторный вход при паузе/ресюме и при пересчётах timeWarpScale",
+        "Audio transition (ignite.mp3) выполняется best-effort независимо от ошибок audio"
+      ],
+      "test_steps": [
+        "1. Дождаться окончания STRIKE и проверить: INERTIA стартует автоматически",
+        "2. Протестировать сценарий: пауза сразу перед завершением STRIKE → резюме → проверка отсутствия дублей INERTIA",
+        "3. Проверить guard по одной завершенной STRIKE: количество INERTIA-entries=1"
+      ],
+      "dependencies": ["TASK-V1.1-005"],
+      "status": "pending"
+    },
+    {
+      "id": "TASK-V1.1-007",
+      "category": "integration",
+      "priority": "high",
+      "description": "INERTIA pulse scheduler: интервал 3–6 минут, рандомизация, отсутствие дублей, корректная остановка планировщика при выходе из INERTIA.",
+      "acceptance_criteria": [
+        "Интервал между pulse внутри INERTIA: 3–6 минут (рандом внутри диапазона)",
+        "ignite.mp3 проигрывается только пока активен режим INERTIA",
+        "После выхода из INERTIA (EXIT / auto-exit) новые pulse не планируются и не срабатывают",
+        "Если inertiaNextPulseAtMillis=null после рестарта — планировщик пересчитывается при первом входе в INERTIA"
+      ],
+      "test_steps": [
+        "1. Дождаться двух consecutive pulse в INERTIA и измерить/проверить, что интервалы в диапазоне",
+        "2. Перезапустить приложение во время INERTIA и проверить отсутствие дублей pulse",
+        "3. Нажать EXIT и убедиться, что последующие pulse не воспроизводятся"
+      ],
+      "dependencies": ["TASK-V1.1-006"],
+      "status": "pending"
+    },
+    {
+      "id": "TASK-V1.1-008",
+      "category": "integration",
+      "priority": "high",
+      "description": "MAX FLOW лимит и confirm: inertiaCycleCount==6 → overlay 'MAX FLOW REACHED. CONTINUE?' + 30s YES window → авто-выход в стандартный ОТДЫХ при отсутствии YES.",
+      "acceptance_criteria": [
+        "inertiaCycleCount достигает 6 и срабатывает overlay ровно один раз",
+        "Окно YES длится 30 секунд; при YES overlay закрывается и INERTIA продолжает работу",
+        "Если YES не нажата в течение 30 секунд — авто-переход в стандартный recovery/rest flow",
+        "Логика корректна при timeWarpScale и при перезапуске в середине confirm-window"
+      ],
+      "test_steps": [
+        "1. Дождаться overlay MAX FLOW и не нажимать YES → проверить авто-выход в ОТДЫХ",
+        "2. Дождаться overlay MAX FLOW и нажать YES в пределах 30 секунд → проверить продолжение INERTIA",
+        "3. Перезапустить приложение во время confirm-window → проверить, что overlay и тайм-аут отработают корректно"
+      ],
+      "dependencies": ["TASK-V1.1-007"],
+      "status": "pending"
+    },
+    {
+      "id": "TASK-V1.1-009",
+      "category": "frontend",
+      "priority": "high",
+      "description": "UI lock в INERTIA: показывать только кнопку EXIT и (только при MAX FLOW) overlay confirm; остальная ветвь INERTIA/ОТДЫХ отсутствует.",
+      "acceptance_criteria": [
+        "В режиме INERTIA доступны только элементы управления EXIT",
+        "Overlay MAX FLOW появляется только на 6-м цикле и содержит кнопку/действие YES",
+        "EXIT корректно завершает INERTIA, останавливает pulse/confirm и переводит в standard REST/RECOVERY flow"
+      ],
+      "test_steps": [
+        "1. Зайти в INERTIA и убедиться визуально/логически: нет других кнопок кроме EXIT",
+        "2. Дойти до MAX FLOW overlay и проверить текст/кнопку YES",
+        "3. Нажать EXIT во время INERTIA (до и после overlay) и проверить корректный переход"
+      ],
+      "dependencies": ["TASK-V1.1-008"],
+      "status": "pending"
+    },
+    {
+      "id": "TASK-V1.1-010",
+      "category": "testing",
+      "priority": "medium",
+      "description": "E2E критические сценарии устойчивости: STRIKE→INERTIA→pulse→MAX FLOW(confirm/auto-exit)→EXIT→последующий REST без зависаний, включая пауза/ресюме и перезапуски.",
+      "acceptance_criteria": [
+        "Guard от повторного входа сохраняется во всех сценариях",
+        "Auto-exit по MAX FLOW таймауту стабилен",
+        "Переходы после EXIT продолжают стандартную логику recovery/rest flow"
+      ],
+      "test_steps": [
+        "1. Scenario A: STRIKE→INERTIA → дождаться 1 pulse → перезапустить приложение → проверить следующий pulse",
+        "2. Scenario B: дождаться MAX FLOW → дождаться авто-exit (не нажимать YES) → проверить переход в REST",
+        "3. Scenario C: дождаться MAX FLOW → нажать YES в окне → проверить продолжение INERTIA и отсутствие auto-exit",
+        "4. Scenario D: во время INERTIA несколько раз изменить timeWarpScale → проверить отсутствие зависаний и корректность завершения окон"
+      ],
+      "dependencies": ["TASK-V1.1-009"],
+      "status": "pending"
     }
   ]
 }

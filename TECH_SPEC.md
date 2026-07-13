@@ -336,3 +336,106 @@ Backend/API отсутствует.
 - Если пользователь меняет ползунок во время RUNNING:
   - поведение должно обеспечивать продолжение автопереходов (переходы не должны “останавливаться” из-за рассинхрона тайминга).
 
+---
+*Добавлено: 2026-07-13*
+## Architecture Upgrade: Version 1.2 - Deep Flow Inertia Controller (Auto after Phase 3)
+
+### 1. Architectural Changes (Изменения в архитектуре)
+Цель апгрейда — убрать ветвление после завершения фазы 3 (“Уничтожай”) и переводить пользователя в режим **INERTIA** автоматически, без UI выбора “⚡ ИНЕРЦИЯ / 🧠 ОТДЫХ”.
+
+Изменения в state machine (delta):
+- **Было:** после завершения **STRIKE (фаза 3)** система переводит в ветку ожидания выбора режимов (ИНЕРЦИЯ/ОТДЫХ).
+- **Стало:** после завершения **STRIKE (фаза 3)** сразу и автоматически:
+  - включается `isInertiaMode = true`
+  - вход в INERTIA выполняется **один раз** на одно завершение STRIKE (guard от повторного триггера).
+- В INERTIA применяется отдельная внутренняя логика:
+  - планировщик мягких pulse-сигналов каждые **3–6 минут** (рандом внутри диапазона) только пока активен `isInertiaMode`.
+  - лимитер бездействия “MAX FLOW” на **6 циклов** (нарастание счётчика при отсутствии ответа/действий пользователя).
+  - 30-секундное окно confirm на 6-м цикле:
+    - если пользователь не подтверждает **YES в течение 30 секунд**, система автоматически переводит в стандартный **ОТДЫХ** (recovery/rest flow).
+
+### 2. Database Migrations (Миграции БД)
+Серверной БД нет; сохраняется только локальное состояние в **SharedPreferences** (offline persistence). Для сохранения устойчивости после перезапуска приложения добавляем *дополнительные поля* в `bypass_timer_state`.
+
+**Storage (SharedPreferences / timer state) — (ALTER, new optional keys):**
+- **Добавить (nullable / safe defaults):**
+  - `inertiaCycleCount` (int, default `0`)
+    - Количество завершенных “инерционных циклов” внутри INERTIA.
+    - **Определение цикла (важно для консистентности):** 1 цикл = интервал INERTIA между двумя “проверками активности”:
+      1) либо между входом в INERTIA/последним pulse,
+      2) и моментом, когда система считает, что пользователь не сделал валидного действия (в текущей спецификации валидным действием считается нажатие `EXIT`, либо (если есть) подтверждение YES на overlay MAX FLOW).
+    - Практически: `inertiaCycleCount` инкрементится ровно один раз на каждое срабатывание/истечение pulse-таймера INERTIA (если до этого не было `EXIT` и не был закрыт overlay через `YES`).
+  - `inertiaNextPulseAtMillis` (int?, default `null`)
+    - абсолютное время следующего pulse (вычисляется при входе в INERTIA и после каждого срабатывания pulse).
+    - Для идемпотентности интерпретируется как **deadline**: `pulse` должен сработать **не чаще 1 раза** на одно и то же окно.
+  - `inertiaPendingMaxFlowConfirmUntilMillis` (int?, default `null`)
+    - абсолютное время истечения 30-секундного окна на 6-м цикле
+  - `isInertiaConfirmShown` (bool, default `false`)
+    - флаг отображения overlay “MAX FLOW REACHED. CONTINUE?”
+  - `lastInertiaPhaseTransitionId` (int?, default `null`)
+    - guard для гарантии “вход в INERTIA срабатывает ровно один раз” на завершение STRIKE.
+    - **Правило:** вход в INERTIA выполняется только если `lastInertiaPhaseTransitionId != currentPhaseTransitionId` (см. ниже определение `currentPhaseTransitionId`).
+
+**Определение `currentPhaseTransitionId` (для guard/идемпотентности):**
+- `currentPhaseTransitionId` = монотонно растущий id “события завершения фазы”.
+- Инкремент происходит **строго при фиксации** перехода STRIKE(фаза 3) → INERTIA (то есть один раз на одно завершение STRIKE).
+- Это значение должно быть доступно на момент вычисления guard; если его нет в хранилище, то временно используем производную величину: `targetEndTimeMillis` фазы STRIKE + `currentPhaseIndex` (как строковой/числовой composite id), но лучше хранить явный id в state.
+
+**Backward compatibility:**
+- Если ключи отсутствуют (старые версии приложения):
+  - `inertiaCycleCount = 0`
+  - `inertiaNextPulseAtMillis = null` (планировщик создаётся при старте INERTIA)
+  - `isInertiaConfirmShown = false`
+  - `inertiaPendingMaxFlowConfirmUntilMillis = null`
+  - `lastInertiaPhaseTransitionId = null` (guard устанавливается при первом завершении STRIKE в сессию)
+
+**Схема новых связей (Delta ERD):**
+```mermaid
+erDiagram
+    TIMER_STATE {
+        int inertiaCycleCount
+        int? inertiaNextPulseAtMillis
+        bool isInertiaConfirmShown
+        int? inertiaPendingMaxFlowConfirmUntilMillis
+    }
+```
+
+### 3. API Delta Contracts (Изменения в контрактах API)
+Backend/API отсутствует. Изменение — в *контракте поведения* UI и `TimerProvider`.
+
+**NEW/Modified UI behavior (delta contracts):**
+- **INERTIA entry trigger (MODIFIED):**
+  - Триггер: завершение **STRIKE**.
+  - Действие: `TimerProvider` выставляет `isInertiaMode = true` без пользовательского перехода/выбора.
+  - Звук: проигрывается `bypass-app\bypass-apk\assets\sounds\ignite.mp3` при входе в INERTIA.
+- **INERTIA UI lock (MODIFIED):**
+  - В INERTIA показывается только одна кнопка: `EXIT`
+  - Отсутствуют действия/кнопки кроме `EXIT` (и временного overlay confirm на 6-м цикле).
+- **MAX FLOW confirm (NEW):**
+  - При достижении лимита бездействия `inertiaCycleCount == 6`:
+    - overlay: “MAX FLOW REACHED. CONTINUE?”
+    - ожидание ответа **YES** в течение **30 секунд**
+  - При отсутствии YES в срок:
+    - автоматический переход в **ОТДЫХ** (standard rest/recovery transition дальше по текущим правилам).
+
+**Breaking change?**
+- Нет. Это изменение *ветвления в UI/flow после фазы 3*.
+- Порядок фаз не нарушается: после INERTIA система продолжает стандартный recovery/rest сценарий так, как было предусмотрено ранее.
+
+### 4. Infrastructure & Third-Party (Инфраструктура)
+- Новые интеграции не требуются.
+- Используется существующий аудио-ресурс:
+  - `ignite.mp3` для входа и мягких pulse-сигналов в INERTIA.
+- Тайминг pulse реализуется через существующую модель абсолютных timestamp’ов (`...AtMillis`) для устойчивости к пересчётам/паузам/перезапускам.
+
+### 5. Fallback & Migration Strategy (План Б)
+- Если после рестарта не удалось восстановить `inertiaNextPulseAtMillis` (ключ `null`):
+  - при первом входе в INERTIA планировщик пересчитывает `inertiaNextPulseAtMillis` заново.
+- Если confirm overlay не был восстановлен корректно (`isInertiaConfirmShown=false` при наличии pending timestamp):
+  - при обнаружении `inertiaPendingMaxFlowConfirmUntilMillis != null` overlay должен быть показан до истечения 30 секунд (или сразу отработан авто-выход при истечении).
+- Guard от повторного входа в INERTIA:
+  - `lastInertiaPhaseTransitionId` используется как “одиночное срабатывание” на завершение STRIKE.
+- Если воспроизведение `ignite.mp3` недоступно/провалилось:
+  - аудио — best-effort, но переходы в INERTIA/ОТДЫХ должны происходить независимо от успешности audio.
+
+
