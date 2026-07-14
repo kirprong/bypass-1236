@@ -286,6 +286,18 @@ SLAYER (10000) → WARLORD (15000) → OVERLORD (22500) → APEX PREDATOR (33750
 
 ---
 
+### As-Built Deviations — V1.1 / V1.2 (Meta Time Scaling & Deep Flow Inertia)
+
+1. **Dead Man's Switch после STRIKE удалён.** В изначальном Stage 0/PRD после STRIKE запускался 30-секундный Dead Man's Switch → авто-отдых. В V1.2 эта ветка полностью убрана: метод `_startDeadManSwitch` удалён из `TimerProvider`, выбор ИНЕРЦИЯ/ОТДЫХ больше не запрашивается. Вместо него — авто-вход в INERTIA.
+2. **INERTIA auto-enter больше не требует Premium.** В Stage 11 (Paywall) ИНЕРЦИЯ была доступна только Premium-пользователям (`activateInertia` проверял `isPremium`). В V1.2 авто-вход в INERTIA (`_enterInertiaMode`) выполняется для ВСЕХ пользователей сразу после STRIKE, без проверки Premium. Старый `activateInertia` остался в коде, но стал недостижим из UI (dead code).
+3. **`currentPhaseTransitionId` реализован иначе.** Вместо единого монотонного id, сохранённого в state (как описано в контракте), используется пара полей: `_lastInertiaPhaseTransitionId` (persisted) + `_currentStrikeTransitionId` (runtime, сбрасывается при входе в STRIKE). Guard от повторного входа достигается комбинацией этих полей и проверки `_isInertiaMode`.
+4. **Дополнительный persisted key `currentPhaseBaseSeconds`.** Добавлен в V1.1 (TASK-V1.1-003) для пересчёта окончания фазы при смене `timeWarpScale` во время RUNNING; отсутствует в изначальном контракте V1.2, но персистится в `bypass_timer_state`.
+5. **Pulse INERTIA масштабируется `timeWarpScale`.** Базовый рандом 3–6 мин умножается на `timeWarpScale` (cross-upgrade взаимодействие V1.1×V1.2). При смене ползунка во время INERTIA отложенный pulse пересчитывается пропорционально.
+6. **MAX FLOW: добавлены звук и кнопка NO.** При достижении 6 циклов играет `beep.mp3` ровно один раз; оверлей содержит кнопки **YES** (продолжить) и **NO** (немедленный выход в ОТДЫХ), плюс авто-выход по таймауту 30с. В уведомлении INERTIA показывается счётчик «Цикл X/6».
+7. **`timeWarpScale` — единственная точка применения масштаба.** Все фазы и pulse масштабируются только через `timeWarpScale`; порядок фаз и точки переходов неизменны.
+
+---
+
 ## 9. Security & Authentication
 
 Stage 0-4: **без Auth**, **без пользователей**. Все локально.
@@ -344,10 +356,11 @@ Backend/API отсутствует.
 Цель апгрейда — убрать ветвление после завершения фазы 3 (“Уничтожай”) и переводить пользователя в режим **INERTIA** автоматически, без UI выбора “⚡ ИНЕРЦИЯ / 🧠 ОТДЫХ”.
 
 Изменения в state machine (delta):
-- **Было:** после завершения **STRIKE (фаза 3)** система переводит в ветку ожидания выбора режимов (ИНЕРЦИЯ/ОТДЫХ).
+- **Было:** после завершения **STRIKE (фаза 3)** система переводит в ветку ожидания выбора режимов (ИНЕРЦИЯ/ОТДЫХ) с Dead Man's Switch (30с → авто-отдых).
 - **Стало:** после завершения **STRIKE (фаза 3)** сразу и автоматически:
-  - включается `isInertiaMode = true`
-  - вход в INERTIA выполняется **один раз** на одно завершение STRIKE (guard от повторного триггера).
+   - включается `isInertiaMode = true` (без проверки Premium — см. As-Built Deviations V1.2)
+   - вход в INERTIA выполняется **один раз** на одно завершение STRIKE (guard: `_lastInertiaPhaseTransitionId` + `_currentStrikeTransitionId`, плюс проверка `_isInertiaMode`)
+- **Удалено:** Dead Man's Switch после STRIKE полностью убран (метод `_startDeadManSwitch` удалён из `TimerProvider`); выбор ИНЕРЦИЯ/ОТДЫХ больше не запрашивается.
 - В INERTIA применяется отдельная внутренняя логика:
   - планировщик мягких pulse-сигналов каждые **3–6 минут** (рандом внутри диапазона) только пока активен `isInertiaMode`.
   - лимитер бездействия “MAX FLOW” на **6 циклов** (нарастание счётчика при отсутствии ответа/действий пользователя).
@@ -374,7 +387,9 @@ Backend/API отсутствует.
     - флаг отображения overlay “MAX FLOW REACHED. CONTINUE?”
   - `lastInertiaPhaseTransitionId` (int?, default `null`)
     - guard для гарантии “вход в INERTIA срабатывает ровно один раз” на завершение STRIKE.
-    - **Правило:** вход в INERTIA выполняется только если `lastInertiaPhaseTransitionId != currentPhaseTransitionId` (см. ниже определение `currentPhaseTransitionId`).
+     - **Правило:** вход в INERTIA выполняется только если `lastInertiaPhaseTransitionId != currentPhaseTransitionId` (см. ниже определение `currentPhaseTransitionId`).
+   - `currentPhaseBaseSeconds` (int, default `phase1Duration`=60)
+     - Немасштабированная (базовая) длительность текущей фазы. Добавлена в V1.1 для корректного пересчёта окончания фазы / `remainingSeconds` при изменении `timeWarpScale` **во время RUNNING** (см. TASK-V1.1-003). Персистится вместе с состоянием. Обеспечивает, что при движении ползунка темп фазы меняется без рестарта и без зависаний.
 
 **Определение `currentPhaseTransitionId` (для guard/идемпотентности):**
 - `currentPhaseTransitionId` = монотонно растущий id “события завершения фазы”.
@@ -397,6 +412,7 @@ erDiagram
         int? inertiaNextPulseAtMillis
         bool isInertiaConfirmShown
         int? inertiaPendingMaxFlowConfirmUntilMillis
+        int currentPhaseBaseSeconds
     }
 ```
 
@@ -404,19 +420,23 @@ erDiagram
 Backend/API отсутствует. Изменение — в *контракте поведения* UI и `TimerProvider`.
 
 **NEW/Modified UI behavior (delta contracts):**
-- **INERTIA entry trigger (MODIFIED):**
-  - Триггер: завершение **STRIKE**.
-  - Действие: `TimerProvider` выставляет `isInertiaMode = true` без пользовательского перехода/выбора.
-  - Звук: проигрывается `bypass-app\bypass-apk\assets\sounds\ignite.mp3` при входе в INERTIA.
+   - **INERTIA entry trigger (MODIFIED):**
+     - Триггер: завершение **STRIKE**.
+     - Действие: `TimerProvider` выставляет `isInertiaMode = true` без пользовательского перехода/выбора (и **без проверки Premium** — см. As-Built Deviations V1.2).
+     - Звук: проигрывается `bypass-app\bypass-apk\assets\sounds\ignite.mp3` при входе в INERTIA (best-effort, переход не зависит от ошибок audio).
 - **INERTIA UI lock (MODIFIED):**
   - В INERTIA показывается только одна кнопка: `EXIT`
   - Отсутствуют действия/кнопки кроме `EXIT` (и временного overlay confirm на 6-м цикле).
 - **MAX FLOW confirm (NEW):**
-  - При достижении лимита бездействия `inertiaCycleCount == 6`:
-    - overlay: “MAX FLOW REACHED. CONTINUE?”
-    - ожидание ответа **YES** в течение **30 секунд**
-  - При отсутствии YES в срок:
-    - автоматический переход в **ОТДЫХ** (standard rest/recovery transition дальше по текущим правилам).
+   - Счётчик циклов INERTIA отображается в уведомлении: «Цикл X/6» (виден весь режим INERTIA).
+   - При достижении лимита (6 циклов без действий) появляется оверлей (всё ещё в режиме INERTIA):
+     - “MAX FLOW REACHED. CONTINUE?”
+     - звук `beep.mp3` проигрывается **ровно один раз** в момент появления оверлея (`playDeadManSwitchSound`).
+   - Ожидание ответа в течение **30 секунд**:
+     - **YES** (`confirmMaxFlow()`) → оверлей закрывается, INERTIA продолжается, счётчик циклов сбрасывается.
+     - **NO** (`declineMaxFlow()`) → немедленный выход в **ОТДЫХ**.
+     - нет ответа за 30с (`_autoExitMaxFlow()`) → автоматический переход в **ОТДЫХ**.
+   - **Взаимодействие с V1.1:** интервал pulse INERTIA (базовый рандом 3–6 мин) ДОПОЛНИТЕЛЬНО масштабируется глобальным `timeWarpScale` (см. `_scheduleNextPulse`). При смене ползунка во время RUNNING отложенный pulse пересчитывается пропорционально (см. `setTimeWarpScale`).
 
 **Breaking change?**
 - Нет. Это изменение *ветвления в UI/flow после фазы 3*.

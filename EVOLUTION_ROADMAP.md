@@ -33,6 +33,8 @@
 - [x] Time Warp Scale UI (0.5x - 2.0x) в SettingsScreen
 - [x] _getScaledPhaseDuration() с clamp-валидацией и fallback 1.0
 - [x] Guard _phaseCompleted от повторного триггера перехода фазы
+- [x] Пересчёт окончания текущей фазы при изменении ползунка **во время RUNNING** (без рестарта, с сохранением доли пройденного времени; поле `currentPhaseBaseSeconds`)
+- [x] Явная валидация NaN/Infinity/вне диапазона → fallback 1.0 в `setTimeWarpScale`
 - [x] Применение масштаба ко всем фазам: THINKING, PREP, STRIKE, RECOVERY
 - [x] Сохранение/восстановление timeWarpScale из SharedPreferences
 
@@ -101,7 +103,7 @@
 
 ---
 
-## 🔜 STAGE 6: Deep Flow Inertia Controller (Auto after Phase 3) [TODO]
+## 🟢 STAGE 6: Deep Flow Inertia Controller (Auto after Phase 3) [x] ✅ COMPLETED
 **Суть:** После фазы 3 (“Уничтожай”) приложение автоматически переводит пользователя в режим **INERTIA** без каких-либо дополнительных запросов инерции/отдыха.
 
 **Правила INERTIA:**
@@ -118,6 +120,18 @@
   - появляется вопрос (оверлей): **“Всё ещё в инерции?” / “MAX FLOW REACHED. CONTINUE?”**
   - у пользователя **30 секунд**, чтобы ответить **YES**
   - если ответа **нет** → **автоматический выход в отдых** и далее по обычной логике.
+
+**Фактически реализовано (вышло за рамки черновика):**
+- **Автовход в INERTIA** сразу после STRIKE через `_enterInertiaMode()` (без UI-выбора). Guard от повторного входа: `_lastInertiaPhaseTransitionId` + `_currentStrikeTransitionId` + проверка `_isInertiaMode`.
+- **Dead Man's Switch после STRIKE удалён** (метод `_startDeadManSwitch` убран) — вместо него авто-INERTIA.
+- **Pulse-планировщик:** рандом 3–6 мин, ровно один pulse на окно (перепланировка deadline), остановка при выходе, пересчёт после рестарта без дублей.
+- **Pulse масштабируется `timeWarpScale`** (cross-upgrade V1.1×V1.2): интервал 3–6 мин умножается на масштаб; при движении ползунка во время INERTIA отложенный pulse пересчитывается.
+- **UI Lock:** в INERTIA только кнопка **EXIT** (бывш. «ЗАВЕРШИТЬ ИНЕРЦИЮ»); ветвь ИНЕРЦИЯ/ОТДЫХ скрыта.
+- **MAX FLOW (на 6-м цикле):** оверлей «MAX FLOW REACHED. CONTINUE?» + звук `beep.mp3` ровно один раз; кнопки **YES** (продолжить, счётчик сбрасывается) и **NO** (выход в отдых); авто-выход в отдых по таймауту 30с (`_autoExitMaxFlow`). Счётчик «Цикл X/6» виден в уведомлении.
+- **Persistence:** 5 ключей SharedPreferences для устойчивости INERTIA (`inertiaCycleCount`, `inertiaNextPulseAtMillis`, `inertiaPendingMaxFlowConfirmUntilMillis`, `isInertiaConfirmShown`, `lastInertiaPhaseTransitionId`) + `currentPhaseBaseSeconds` (V1.1).
+- **🛑 Deviation:** авто-вход в INERTIA теперь **без проверки Premium** (Paywall Stage 11 «Инерция только для Premium» не применяется в V1.2). См. TECH_SPEC.md → As-Built Deviations V1.1/V1.2.
+
+**Статус:** Завершено в рамках Upgrade Pipeline v1.2.
 
 ---
 
