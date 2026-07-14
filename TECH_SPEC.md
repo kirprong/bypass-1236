@@ -374,27 +374,25 @@ Backend/API отсутствует.
 - **Добавить (nullable / safe defaults):**
   - `inertiaCycleCount` (int, default `0`)
     - Количество завершенных “инерционных циклов” внутри INERTIA.
-    - **Определение цикла (важно для консистентности):** 1 цикл = интервал INERTIA между двумя “проверками активности”:
-      1) либо между входом в INERTIA/последним pulse,
-      2) и моментом, когда система считает, что пользователь не сделал валидного действия (в текущей спецификации валидным действием считается нажатие `EXIT`, либо (если есть) подтверждение YES на overlay MAX FLOW).
-    - Практически: `inertiaCycleCount` инкрементится ровно один раз на каждое срабатывание/истечение pulse-таймера INERTIA (если до этого не было `EXIT` и не был закрыт overlay через `YES`).
+    - Цикл инкрементится ровно один раз на каждое *одно* срабатывание pulse внутри INERTIA, если до этого не было `EXIT` и overlay MAX FLOW не был закрыт через `YES`.
   - `inertiaNextPulseAtMillis` (int?, default `null`)
-    - абсолютное время следующего pulse (вычисляется при входе в INERTIA и после каждого срабатывания pulse).
-    - Для идемпотентности интерпретируется как **deadline**: `pulse` должен сработать **не чаще 1 раза** на одно и то же окно.
+    - абсолютное время следующего pulse (deadline).
+  - `inertiaPulseFiredAtMillis` (int?, default `null`)
+    - абсолютное время последнего *успешного* “fire” pulse.
+    - Guard one-time: pulse считается “выполненным” если `inertiaPulseFiredAtMillis != null && inertiaPulseFiredAtMillis == inertiaNextPulseAtMillis`.
   - `inertiaPendingMaxFlowConfirmUntilMillis` (int?, default `null`)
     - абсолютное время истечения 30-секундного окна на 6-м цикле
   - `isInertiaConfirmShown` (bool, default `false`)
     - флаг отображения overlay “MAX FLOW REACHED. CONTINUE?”
-  - `lastInertiaPhaseTransitionId` (int?, default `null`)
-    - guard для гарантии “вход в INERTIA срабатывает ровно один раз” на завершение STRIKE.
-     - **Правило:** вход в INERTIA выполняется только если `lastInertiaPhaseTransitionId != currentPhaseTransitionId` (см. ниже определение `currentPhaseTransitionId`).
-   - `currentPhaseBaseSeconds` (int, default `phase1Duration`=60)
-     - Немасштабированная (базовая) длительность текущей фазы. Добавлена в V1.1 для корректного пересчёта окончания фазы / `remainingSeconds` при изменении `timeWarpScale` **во время RUNNING** (см. TASK-V1.1-003). Персистится вместе с состоянием. Обеспечивает, что при движении ползунка темп фазы меняется без рестарта и без зависаний.
+  - `lastInertiaForPhase3EndMillis` (int?, default `null`)
+    - guard входа в INERTIA ровно один раз на *конкретное* завершение STRIKE.
+    - Правило: вход выполняется только если `lastInertiaForPhase3EndMillis != phase3EndTimeMillis` (где `phase3EndTimeMillis` = `targetEndTimeMillis` в момент завершения STRIKE).
+  - `currentPhaseBaseSeconds` (int, default `phase1Duration`=60)
+    - Оставляется как вспомогательное поле из V1.1 для пересчётов в RUNNING.
 
-**Определение `currentPhaseTransitionId` (для guard/идемпотентности):**
-- `currentPhaseTransitionId` = монотонно растущий id “события завершения фазы”.
-- Инкремент происходит **строго при фиксации** перехода STRIKE(фаза 3) → INERTIA (то есть один раз на одно завершение STRIKE).
-- Это значение должно быть доступно на момент вычисления guard; если его нет в хранилище, то временно используем производную величину: `targetEndTimeMillis` фазы STRIKE + `currentPhaseIndex` (как строковой/числовой composite id), но лучше хранить явный id в state.
+**Удалить из контракта:**
+- `lastInertiaPhaseTransitionId`
+- `currentPhaseTransitionId` (composite/monotonic ids)
 
 **Backward compatibility:**
 - Если ключи отсутствуют (старые версии приложения):
@@ -451,11 +449,156 @@ Backend/API отсутствует. Изменение — в *контракт�
 ### 5. Fallback & Migration Strategy (План Б)
 - Если после рестарта не удалось восстановить `inertiaNextPulseAtMillis` (ключ `null`):
   - при первом входе в INERTIA планировщик пересчитывает `inertiaNextPulseAtMillis` заново.
+- Anti-double pulse после рестарта:
+  - если `inertiaNextPulseAtMillis != null` и `inertiaPulseFiredAtMillis == inertiaNextPulseAtMillis` — pulse **не** должен повторно “fire” до следующего пересчёта deadline.
 - Если confirm overlay не был восстановлен корректно (`isInertiaConfirmShown=false` при наличии pending timestamp):
   - при обнаружении `inertiaPendingMaxFlowConfirmUntilMillis != null` overlay должен быть показан до истечения 30 секунд (или сразу отработан авто-выход при истечении).
 - Guard от повторного входа в INERTIA:
-  - `lastInertiaPhaseTransitionId` используется как “одиночное срабатывание” на завершение STRIKE.
+  - `lastInertiaForPhase3EndMillis` используется как “одиночное срабатывание” на конкретное завершение STRIKE (по `phase3EndTimeMillis`).
 - Если воспроизведение `ignite.mp3` недоступно/провалилось:
   - аудио — best-effort, но переходы в INERTIA/ОТДЫХ должны происходить независимо от успешности audio.
+
+---
+*Добавлено: 2026-07-14*
+## Architecture Upgrade: Version 1.3 - Auto-Start Scheduler (“THE HIT-LIST”)
+
+### 1. Architectural Changes (Изменения в архитектуре)
+Добавляется новый пользовательский сценарий и компонент планировщика, который автоматически инициирует цикл продуктивности в заданное пользователем время.
+
+**Новый компонент: HitListScheduler (на клиенте)**
+- Ответственность:
+  - хранить список слотов расписания (до 10);
+  - при включенном хотя бы одном слоте — инициировать daily trigger в выбранное HH:mm;
+  - обеспечивать анти-дубликаты и идемпотентность “один раз на окно”;
+  - предотвращать конфликт с активным циклом: **если `TimerProvider.isRunning == true`, авто-старт не выполняется**.
+- Реализация по архитектурным принципам текущего проекта:
+  - без server/remote DB;
+  - все состояние и идемпотентные ключи — через SharedPreferences (см. Storage / Database Migrations).
+
+**Новый экран: HitListScreen**
+- Управляет слотами (add/remove, enable/disable, выбор HH:mm через ползунки).
+- Экран должен быть доступен пользователю через существующий UI (например SettingsScreen).
+
+**Точка интеграции с TimerProvider**
+- Планировщик вызывает “мягкое действие” в `TimerProvider`:
+  - переводит систему в сценарий **фаза 0 → ожидание подтверждения цели** (“ЦЕЛЬ?”), как при обычном ручном нажатии/старте.
+- При любом автозапуске соблюдается guard:
+  - если `isRunning == true` — планировщик делает no-op (ничего не меняет).
+
+### 2. Database Migrations (Миграции БД)
+Server-side БД отсутствует; изменения касаются только локального persistence в SharedPreferences и/или persisted state внутри `bypass_timer_state`.
+
+#### Storage (SharedPreferences / timer state) — (ALTER, new optional keys)
+Добавляются **новые nullable/опциональные** ключи. Если ключ отсутствует (старые версии приложения), используются безопасные defaults.
+
+1) **HitList slots**
+- `hitListSlotsJson` (String?, default: `null`)
+  - сериализованный JSON массив слотов:
+    - `slotId` (String, уникальный в пределах приложения)
+    - `enabled` (bool)
+    - `slotOrdinal` (int, стабильный порядок/вес для детерминизма)
+    - `hour` (int 0..23)
+    - `minute` (int 0..59)
+- Backward compatibility:
+  - если `null` → трактовать как пустой список (нет активных слотов).
+
+2) **Идемпотентность “один раз на окно” (упрощенная модель)**
+- `hitListLastExecutedMinuteWindow` (String?, default: `null`)
+  - формат `dayWindowKey = yyyy-MM-dd|HH:mm` (без slotId)
+  - если `dayWindowKey == текущая_дата|HH:mm` — автозапуск для любых слотов этой минуты является no-op.
+- Backward compatibility:
+  - если `null` → окно еще не выполнялось, первая сработка пройдет.
+
+**Схема новых связей (Delta ERD)**
+```mermaid
+erDiagram
+    HitListScheduler ||--o{ HitListSlot : contains
+    HitListScheduler {
+        string hitListSlotsJson
+        string hitListLastExecutedMinuteWindow
+    }
+    HitListSlot {
+        string slotId PK
+        bool enabled
+        int slotOrdinal
+        int hour
+        int minute
+    }
+```
+
+### 3. API Delta Contracts (Изменения в контрактах API)
+Backend/API отсутствует. Изменение — в контрактах поведения между UI/сcheduler и `TimerProvider`.
+
+#### 3.1. TimerProvider: новые поведенческие контракты (delta)
+Добавляются методы (или внутренние публичные контракт-коллбеки) для автозапуска.
+
+**Guard (обязательный AC1.3.4 + AC1.3.5)**
+- При триггере планировщика:
+  - если `timerProvider.isRunning == true` → **не инициировать** авто-старт.
+
+**Auto-start входной контракт (AC1.3.2)**
+- `autoStartFromScheduler(triggerKey, slotId, scheduledAtLocalMillis)`:
+  - цель: инициировать цикл в состоянии:
+    - `currentPhaseIndex = 0`
+    - `needsTargetConfirmation = true` (overlay “ЦЕЛЬ НАЙДЕНА?” ожидает YES/NO как в стандартной логике старта THINKING → Target Confirmation)
+  - должен быть idempotent (AC1.3.5):
+    - если `triggerKey` уже был выполнен в этот день/в это HH:mm для `slotId` → no-op.
+  - должен обеспечивать “один раз на окно” (AC1.3.3):
+    - если windowKey `yyyy-MM-dd|HH:mm` уже был исполнен — no-op для остальных slot’ов на той же минуте.
+
+**Side effects (best-effort)**
+- Включить ту же best-effort инициализацию звука/уведомлений, что и для обычного старта.
+- Ошибки аудио/уведомлений не ломают state machine: переход в фазу 0 должен происходить независимо от успеха воспроизведения.
+
+#### 3.2. HitListScheduler: контракт триггера
+- Daily trigger генерирует “event” в момент HH:mm.
+- Event processing включает:
+  1) guard `!timerProvider.isRunning`
+  2) anti-duplicate per minute windowKey
+  3) idempotency per triggerKey
+  4) вызов `timerProvider.autoStartFromScheduler(...)` ровно один раз на окно
+
+> Примечание по “выбору победителя” при конфликте одинакового HH:mm:
+> - Детерминизм только через `slotOrdinal` (int, стабильный порядок).
+> - Winner = слот с минимальным `slotOrdinal` среди `enabled` слотов на это HH:mm.
+> - Это исключает “плавающее” поведение при перестановках массива/редактировании.
+
+### 4. Infrastructure & Third-Party (Инфраструктура)
+#### Использование существующей инфраструктуры
+- Логика планирования может использовать уже существующие механизмы фонового присутствия:
+  - текущая Android foreground service (из ас-built/существующих модулей)
+  - flutter_local_notifications (для UI/событий)
+- Никаких новых внешних сервисов/провайдеров.
+
+#### Scheduled triggers (ежедневно)
+- Требование AC1.3.2: авто-старт ежедневно в выбранное HH:mm.
+- Архитектурное требование:
+  - scheduler должен уметь восстановить активные слоты после перезапуска приложения;
+  - расписание должно продолжать триггеры, пока включен хотя бы один слот (AC1.3.1/AC1.3.2).
+
+### 5. Fallback & Migration Strategy (План Б)
+1) **Нет ключей расписания (старые версии приложения)**
+- `hitListSlotsJson == null` → считать, что слотов нет → планировщик не инициирует автозапуск.
+
+2) **Нет идемпотентных ключей**
+- `hitListLastExecutedMinuteWindow == null`:
+  - windowKey считается не выполненным, первая сработка выполнит запуск (winner), повтор в эту минуту no-op.
+
+3) **Конфликты в одном окне (несколько слотов на одно время)**
+- Даже если триггер событие пришло несколько раз (например, из-за повторного scheduling/перестроения):
+  - `hitListLastExecutedMinuteWindow` обеспечит “только один запуск” на минуту.
+  - В winner-rule детерминизм обеспечивается `slotOrdinal`, поэтому выбранный слот стабилен.
+
+4) **После рестарта**
+- При восстановлении state:
+  - scheduler перезагружает `enabled` слоты;
+  - идемпотентность сохраняется через persisted keys.
+- Если “невозможно восстановить последний scheduled event”, планировщик все равно должен:
+  - корректно обработать следующую ежедневную минуту (AC1.3.2/AC1.3.5).
+
+5) **Guard “не стартовать при активной работе”**
+- Всегда проверять `timerProvider.isRunning` перед любым autoStart.
+- Это требование защищает от перезапуска текущего цикла и конфликтов с фазовой машиной.
+
 
 

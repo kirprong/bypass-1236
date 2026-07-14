@@ -416,6 +416,121 @@
       ],
       "dependencies": ["TASK-V1.1-009"],
       "status": "done"
+    },
+    {
+      "id": "TASK-V1.3-001",
+      "category": "testing",
+      "priority": "critical",
+      "description": "Регрессионная проверка перед HIT-LIST: автопереходы 1234 и инерция после STRIKE работают без изменений; базовый запуск/пауза/сброс корректны.",
+      "acceptance_criteria": [
+        "В обычном ручном сценарии: THINKING → Target Confirmation → PREP → STRIKE → INERTIA → (EXIT/auto) → REST/Recovery работает без ошибок",
+        "СБРОС останавливает автопереходы как и раньше",
+        "TimerProvider toggle (СТАРТ/ПАУЗА) сохраняет remainingSeconds и корректно резюмится"
+      ],
+      "test_steps": [
+        "1. Запустить приложение и дождаться минимум одного полного завершения фаз до входа в INERTIA",
+        "2. Поставить паузу во время RUNNING, затем RESUME и проверить корректность remainingSeconds",
+        "3. Нажать СБРОС в середине цикла и убедиться, что состояние вернулось в THINKING и автопереходы отменились"
+      ],
+      "dependencies": [],
+      "status": "pending"
+    },
+    {
+      "id": "TASK-V1.3-002",
+      "category": "refactoring",
+      "priority": "critical",
+      "description": "Фундамент для HIT-LIST: реализовать persisted keys и контракт входа из scheduler в TimerProvider (autoStartFromScheduler) без влияния на существующую state machine.",
+      "acceptance_criteria": [
+        "Добавлены persisted ключи: hitListSlotsJson и hitListLastExecutedMinuteWindow с безопасными defaults",
+        "TimerProvider предоставляет контракт autoStartFromScheduler(triggerKey, slotId, scheduledAtLocalMillis), который переводит систему в фазу 0 с needsTargetConfirmation=true",
+        "Guard: если TimerProvider.isRunning==true, autoStartFromScheduler является no-op",
+        "Идемпотентность: запуск в одну и ту же минуту для заданного windowKey выполняется не более одного раза"
+      ],
+      "test_steps": [
+        "1. Смоделировать вызов autoStartFromScheduler при isRunning==false → ожидать нужное состояние (phaseIndex=0, needsTargetConfirmation=true)",
+        "2. Смоделировать вызов при isRunning==true → убедиться, что состояние не меняется",
+        "3. Вызвать autoStartFromScheduler дважды в одну и ту же минуту (same windowKey) → второй вызов no-op"
+      ],
+      "dependencies": ["TASK-V1.3-001"],
+      "status": "pending"
+    },
+    {
+      "id": "TASK-V1.3-003",
+      "category": "integration",
+      "priority": "high",
+      "description": "HitListScheduler: daily triggers HH:mm, выбор winner-слота по slotOrdinal, анти-дубликаты, восстановление после перезапуска и идемпотентность windowKey.",
+      "acceptance_criteria": [
+        "Система читает hitListSlotsJson и обрабатывает до 10 слотов",
+        "Если enabled слотов нет → триггеры не создаются/не запускают цикл",
+        "В момент HH:mm выполняется запуск ТОЛЬКО для одного winner-слота (минимальный slotOrdinal)",
+        "Идемпотентность на минуту: windowKey yyyy-MM-dd|HH:mm не позволяет повторить запуск в ту же минуту",
+        "Восстановление после рестарта не приводит к дублям: ранее выполненные windowKey не повторяются"
+      ],
+      "test_steps": [
+        "1. Создать 2 слота на одно HH:mm с разными slotOrdinal и проверить, что winner — с минимальным slotOrdinal",
+        "2. Проверить анти-дубликаты: событие (или повторная обработка) той же минуты не запускает повторно",
+        "3. Перезапустить приложение сразу до срабатывания, и убедиться, что срабатывание происходит один раз"
+      ],
+      "dependencies": ["TASK-V1.3-002"],
+      "status": "pending"
+    },
+    {
+      "id": "TASK-V1.3-004",
+      "category": "frontend",
+      "priority": "high",
+      "description": "HitListScreen UI: управление слотами расписания (до 10), enable/disable, добавление/удаление, выбор HH:mm через ползунки, сохранение состояния.",
+      "acceptance_criteria": [
+        "Экран отображает список слотов и позволяет добавить/удалить слот",
+        "У каждого слота есть переключатель включения/выключения",
+        "Время каждого слота выбирается через HH:mm ползунки",
+        "Расписание считается активным, если включен хотя бы один слот",
+        "Изменения сохраняются и восстанавливаются после перезапуска"
+      ],
+      "test_steps": [
+        "1. Добавить 2 слота, включить оба и выбрать разные HH:mm",
+        "2. Выключить один слот и убедиться, что расписание остается активным при наличии другого включенного",
+        "3. Перезапустить приложение и проверить восстановление списка и enabled-флагов"
+      ],
+      "dependencies": ["TASK-V1.3-002"],
+      "status": "pending"
+    },
+    {
+      "id": "TASK-V1.3-005",
+      "category": "integration",
+      "priority": "critical",
+      "description": "Конфликт с активным циклом: запрет авто-старта при timerProvider.isRunning==true и корректная обработка пересоздания scheduler.",
+      "acceptance_criteria": [
+        "Если TimerProvider.isRunning==true, auto-start из scheduler не выполняется (no-op) и не сбивает текущий цикл",
+        "Если несколько срабатываний попали в короткий промежуток при isRunning==true, состояние не меняется",
+        "После выхода из RUNNING и дожидания следующего HH:mm запуск выполняется корректно"
+      ],
+      "test_steps": [
+        "1. Запустить цикл вручную (isRunning=true), затем дождаться HH:mm с включенным слотом → убедиться, что состояние не сбилось",
+        "2. Сделать паузу/остановку так, чтобы isRunning стало false, и затем дождаться следующей минуты слота",
+        "3. Проверить, что сработал только один запуск на окно"
+      ],
+      "dependencies": ["TASK-V1.3-003"],
+      "status": "pending"
+    },
+    {
+      "id": "TASK-V1.3-006",
+      "category": "testing",
+      "priority": "high",
+      "description": "E2E сценарии HIT-LIST: ежедневный авто-старт, MAX one-per-minute, восстановление после рестарта, winner слотOrdinal и guard isRunning.",
+      "acceptance_criteria": [
+        "Авто-старт инициирует цикл в фазе 0 и overlay Target Confirmation появляется",
+        "Повторное срабатывание той же минуты не запускает цикл повторно",
+        "После рестарта активные слоты работают, но выполненные windowKey не дают дублей",
+        "При конфликтах слотов на одно HH:mm срабатывает детерминированный winner"
+      ],
+      "test_steps": [
+        "1. Включить один слот на ближайшее HH:mm и дождаться auto-start → проверить: фаза 0 + needsTargetConfirmation=true",
+        "2. Сымитировать повтор обработки event той же минуты → убедиться, что запуск только один раз",
+        "3. Перезапустить приложение до и после срабатывания → проверить отсутствие дублей на выполненном windowKey",
+        "4. Включить несколько слотов на одно HH:mm → проверить winner по slotOrdinal"
+      ],
+      "dependencies": ["TASK-V1.3-004", "TASK-V1.3-005"],
+      "status": "pending"
     }
   ]
 }
