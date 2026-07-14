@@ -9,6 +9,7 @@ import '../services/notification_service.dart';
 import '../services/foreground_service.dart';
 import '../utils/constants.dart';
 import 'stats_provider.dart';
+import 'hit_list_provider.dart';
 
 /// Провайдер таймера с автоматическими переходами и Dead Man's Switch
 class TimerProvider with ChangeNotifier {
@@ -39,9 +40,13 @@ class TimerProvider with ChangeNotifier {
   int? _lastInertiaPhaseTransitionId; // Guard одиночного входа в INERTIA (на STRIKE)
   int? _currentStrikeTransitionId; // Id завершения текущего STRIKE (для idempotent guard)
 
+  // HIT-LIST (V1.3) — идемпотентность "один раз на окно" (yyyy-MM-dd|HH:mm)
+  String? _hitListLastExecutedMinuteWindow;
+
   final AudioService _audioService = AudioService();
   final NotificationService _notificationService = NotificationService();
   StatsProvider? _statsProvider;
+  HitListProvider? _hitListProvider;
 
   // Getters
   int get currentPhaseIndex => _currentPhaseIndex;
@@ -59,6 +64,8 @@ class TimerProvider with ChangeNotifier {
   bool get isInertiaConfirmShown => _isInertiaConfirmShown;
   int? get lastInertiaPhaseTransitionId => _lastInertiaPhaseTransitionId;
   bool get showMaxFlowConfirm => _isInertiaConfirmShown;
+  String? get hitListLastExecutedMinuteWindow =>
+      _hitListLastExecutedMinuteWindow;
   int get maxFlowConfirmRemainingSeconds {
     if (_inertiaPendingMaxFlowConfirmUntilMillis == null) return 0;
     final remaining =
@@ -88,6 +95,12 @@ class TimerProvider with ChangeNotifier {
 
   void setStatsProvider(StatsProvider statsProvider) {
     _statsProvider = statsProvider;
+  }
+
+  /// Связывает HitListScheduler с этим провайдером (двунаправленная связь).
+  void setHitListProvider(HitListProvider hitListProvider) {
+    _hitListProvider = hitListProvider;
+    hitListProvider.setTimerProvider(this);
   }
 
   /// Установка глобального масштаба времени (Meta Time Scaling / Time Warp).
@@ -169,6 +182,7 @@ class TimerProvider with ChangeNotifier {
       'inertiaPendingMaxFlowConfirmUntilMillis': _inertiaPendingMaxFlowConfirmUntilMillis,
       'isInertiaConfirmShown': _isInertiaConfirmShown,
       'lastInertiaPhaseTransitionId': _lastInertiaPhaseTransitionId,
+      'hitListLastExecutedMinuteWindow': _hitListLastExecutedMinuteWindow,
     };
     await prefs.setString('bypass_timer_state', jsonEncode(state));
   }
@@ -208,6 +222,8 @@ class TimerProvider with ChangeNotifier {
             state['inertiaPendingMaxFlowConfirmUntilMillis'];
         _isInertiaConfirmShown = state['isInertiaConfirmShown'] ?? false;
         _lastInertiaPhaseTransitionId = state['lastInertiaPhaseTransitionId'];
+        _hitListLastExecutedMinuteWindow =
+            state['hitListLastExecutedMinuteWindow'];
 
         if (_isRunning) {
           final now = DateTime.now().millisecondsSinceEpoch;
@@ -418,6 +434,80 @@ class TimerProvider with ChangeNotifier {
     
     notifyListeners();
     _saveState();
+  }
+
+  /// Авто-старт из HitListScheduler (V1.3 / TASK-V1.3-002).
+  ///
+  /// Контракт:
+  /// - Guard: если таймер уже запущен (_isRunning) — НЕ инициировать авто-старт (no-op).
+  /// - Идемпотентность "один раз на окно": windowKey = yyyy-MM-dd|HH:mm, вычисляемый
+  ///   из [scheduledAtLocalMillis]; если окно уже выполнялось — no-op.
+  /// - Переводит систему в состояние "фаза 0 → ожидание подтверждения цели":
+  ///   currentPhaseIndex = 0, needsTargetConfirmation = true.
+  /// - Побочные эффекты (звук/уведомления) best-effort: state machine не ломается
+  ///   при ошибках audio/notification.
+  ///
+  /// Возвращает `true`, если авто-старт реально выполнен, иначе `false`.
+  bool autoStartFromScheduler(
+    String triggerKey,
+    String slotId,
+    int scheduledAtLocalMillis,
+  ) {
+    // Guard 1: активный цикл — не трогаем состояние (защита от конфликта).
+    if (_isRunning) return false;
+
+    // Идемпотентность "один раз на окно".
+    final windowKey = AppConstants.hitListWindowKey(scheduledAtLocalMillis);
+    if (_hitListLastExecutedMinuteWindow == windowKey) return false;
+
+    // Полный сброс активности к безопасному idle-состоянию перед авто-стартом.
+    _timer?.cancel();
+    _deadManSwitchTimer?.cancel();
+    _audioService.stopLoopingBeep();
+    _safePlatform(() => WakelockPlus.disable());
+    _isRunning = false;
+    _isInertiaMode = false;
+    _inertiaSeconds = 0;
+    _isWaitingForChoice = false;
+    _hasPlayedWarning = false;
+    _phaseCompleted = false;
+    _targetEndTimeMillis = null;
+    _inertiaStartTimeMillis = null;
+    _inertiaCycleCount = 0;
+    _inertiaNextPulseAtMillis = null;
+    _inertiaPendingMaxFlowConfirmUntilMillis = null;
+    _isInertiaConfirmShown = false;
+    _lastInertiaPhaseTransitionId = null;
+    _currentStrikeTransitionId = null;
+
+    // Переход в фазу 0 с ожиданием подтверждения цели ("ЦЕЛЬ НАЙДЕНА?").
+    _currentPhaseIndex = 0;
+    _currentPhaseBaseSeconds = AppConstants.phase1Duration;
+    _remainingSeconds = _getScaledPhaseDuration(0, AppConstants.phase1Duration);
+    _needsTargetConfirmation = true;
+
+    // Фиксируем выполненное окно (idempotency).
+    _hitListLastExecutedMinuteWindow = windowKey;
+    _hitListProvider?.syncExecutedWindow(windowKey);
+
+    // Best-effort побочные эффекты: независимо от ошибок audio/notification.
+    // Обёртка глушит как синхронные, так и асинхронные исключения плагинов.
+    _safePlatform(() => _audioService.playStartSound());
+    _safePlatform(() => ForegroundService.stop());
+    _safePlatform(() => _notificationService.hideNotification());
+
+    notifyListeners();
+    _saveState();
+    return true;
+  }
+
+  /// Безопасный вызов платформенного метода: глушит синхронные и
+  /// асинхронные исключения (например, MissingPluginException в тестах
+  /// или при отсутствии сервиса на устройстве).
+  void _safePlatform(Future<void> Function() fn) {
+    try {
+      fn().catchError((_) {});
+    } catch (_) {}
   }
 
   /// Активация инерции (только для премиум пользователей)

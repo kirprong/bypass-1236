@@ -5,6 +5,7 @@ import '../providers/stats_provider.dart';
 import '../utils/constants.dart';
 import 'paywall_screen.dart';
 import 'methodology_screen.dart';
+import 'hit_list_screen.dart';
 
 /// Экран настроек (как в React версии)
 class SettingsScreen extends StatelessWidget {
@@ -54,6 +55,13 @@ class SettingsScreen extends StatelessWidget {
                   // Time Warp Scale
                   _buildSection('Time Warp Scale', [
                     _buildTimeWarpSlider(),
+                  ]),
+
+                  const SizedBox(height: 30),
+
+                  // HIT-LIST (V1.3) Auto-Start Scheduler
+                  _buildSection('THE HIT-LIST', [
+                    _buildHitListButton(context),
                   ]),
 
                   const SizedBox(height: 30),
@@ -240,6 +248,44 @@ class SettingsScreen extends StatelessWidget {
         fontSize: 15,
         color: AppConstants.textSecondaryColor,
         height: 1.5,
+      ),
+    );
+  }
+
+  Widget _buildHitListButton(BuildContext context) {
+    return GestureDetector(
+      onTap: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (context) => const HitListScreen()),
+        );
+      },
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          border: Border.all(color: AppConstants.phase1Color, width: 1),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(
+              Icons.schedule,
+              color: AppConstants.phase1Color,
+              size: 20,
+            ),
+            const SizedBox(width: 10),
+            const Text(
+              'АВТО-СТАРТ ПО РАСПИСАНИЮ',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+                color: AppConstants.phase1Color,
+                letterSpacing: 1.5,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

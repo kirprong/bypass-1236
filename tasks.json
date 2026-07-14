@@ -433,7 +433,7 @@
         "3. Нажать СБРОС в середине цикла и убедиться, что состояние вернулось в THINKING и автопереходы отменились"
       ],
       "dependencies": [],
-      "status": "pending"
+      "status": "done"
     },
     {
       "id": "TASK-V1.3-002",
@@ -452,7 +452,7 @@
         "3. Вызвать autoStartFromScheduler дважды в одну и ту же минуту (same windowKey) → второй вызов no-op"
       ],
       "dependencies": ["TASK-V1.3-001"],
-      "status": "pending"
+      "status": "done"
     },
     {
       "id": "TASK-V1.3-003",
@@ -472,7 +472,7 @@
         "3. Перезапустить приложение сразу до срабатывания, и убедиться, что срабатывание происходит один раз"
       ],
       "dependencies": ["TASK-V1.3-002"],
-      "status": "pending"
+      "status": "done"
     },
     {
       "id": "TASK-V1.3-004",
@@ -492,7 +492,7 @@
         "3. Перезапустить приложение и проверить восстановление списка и enabled-флагов"
       ],
       "dependencies": ["TASK-V1.3-002"],
-      "status": "pending"
+      "status": "done"
     },
     {
       "id": "TASK-V1.3-005",
@@ -510,7 +510,7 @@
         "3. Проверить, что сработал только один запуск на окно"
       ],
       "dependencies": ["TASK-V1.3-003"],
-      "status": "pending"
+      "status": "done"
     },
     {
       "id": "TASK-V1.3-006",
@@ -530,7 +530,7 @@
         "4. Включить несколько слотов на одно HH:mm → проверить winner по slotOrdinal"
       ],
       "dependencies": ["TASK-V1.3-004", "TASK-V1.3-005"],
-      "status": "pending"
+      "status": "done"
     }
   ]
 }

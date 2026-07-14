@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 import 'providers/timer_provider.dart';
 import 'providers/stats_provider.dart';
+import 'providers/hit_list_provider.dart';
 import 'screens/main_screen.dart';
 import 'screens/stats_screen.dart';
 import 'screens/settings_screen.dart';
@@ -77,10 +78,12 @@ class BypassApp extends StatelessWidget {
     return MultiProvider(
       providers: [
         ChangeNotifierProvider(create: (_) => StatsProvider()),
-        ChangeNotifierProxyProvider<StatsProvider, TimerProvider>(
+        ChangeNotifierProvider(create: (_) => HitListProvider()),
+        ChangeNotifierProxyProvider2<StatsProvider, HitListProvider, TimerProvider>(
           create: (_) => TimerProvider(),
-          update: (_, statsProvider, timerProvider) {
+          update: (_, statsProvider, hitListProvider, timerProvider) {
             timerProvider!.setStatsProvider(statsProvider);
+            timerProvider.setHitListProvider(hitListProvider);
             return timerProvider;
           },
         ),
@@ -149,6 +152,7 @@ class _SafeHomePageState extends State<SafeHomePage> {
 
       final statsProvider = context.read<StatsProvider>();
       final timerProvider = context.read<TimerProvider>();
+      final hitListProvider = context.read<HitListProvider>();
 
       // Инициализируем провайдеры с таймаутом
       debugPrint('📊 Initializing StatsProvider...');
@@ -159,6 +163,16 @@ class _SafeHomePageState extends State<SafeHomePage> {
           throw TimeoutException('Stats initialization timeout');
         },
       );
+      debugPrint('✅ StatsProvider initialized');
+
+      debugPrint('🏴 Initializing HitListProvider...');
+      await hitListProvider.initialize().timeout(
+        const Duration(seconds: 5),
+        onTimeout: () {
+          debugPrint('⚠️ HitListProvider init timeout');
+        },
+      );
+      debugPrint('✅ HitListProvider initialized');
       debugPrint('✅ StatsProvider initialized');
 
       debugPrint('⏱️ Initializing TimerProvider...');
@@ -247,9 +261,11 @@ class _HomePageState extends State<HomePage> {
     if (!mounted) return;
     final statsProvider = context.read<StatsProvider>();
     final timerProvider = context.read<TimerProvider>();
+    final hitListProvider = context.read<HitListProvider>();
 
     await statsProvider.initialize();
     await timerProvider.initialize();
+    await hitListProvider.initialize();
   }
 
   @override

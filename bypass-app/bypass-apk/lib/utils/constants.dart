@@ -89,6 +89,26 @@ class AppConstants {
   // Лимиты для free версии
   static const int freeCyclesPerDay = 3;
 
+  // HIT-LIST (V1.3) — Auto-Start Scheduler ("THE HIT-LIST")
+  static const int hitListMaxSlots = 10;
+  static const String hitListSlotsKey = 'hitListSlotsJson';
+  static const String hitListLastExecutedWindowKey =
+      'hitListLastExecutedMinuteWindow';
+  static const int hitListPollIntervalSeconds = 15;
+
+  /// Формирует идемпотентный ключ окна "один раз на минуту": yyyy-MM-dd|HH:mm
+  /// (локальное время устройства). Используется scheduler'ом и TimerProvider
+  /// для гарантии отсутствия дублей авто-старта в одну минуту.
+  static String hitListWindowKey(int localMillis) {
+    final dt = DateTime.fromMillisecondsSinceEpoch(localMillis);
+    final y = dt.year.toString().padLeft(4, '0');
+    final mo = dt.month.toString().padLeft(2, '0');
+    final d = dt.day.toString().padLeft(2, '0');
+    final hh = dt.hour.toString().padLeft(2, '0');
+    final mm = dt.minute.toString().padLeft(2, '0');
+    return '$y-$mo-$d|$hh:$mm';
+  }
+
   // Ранги (геометрическая прогрессия, минимальный шаг 100)
   static const List<Map<String, dynamic>> ranks = [
     {'name': 'ROOKIE', 'strikes': 100, 'color': Color(0xFF4A4A4A)},
