@@ -117,6 +117,15 @@ class TimerProvider with ChangeNotifier {
       _targetEndTimeMillis = phaseStart + newScaledMs;
       final newRemaining = ((_targetEndTimeMillis! - now) / 1000).ceil();
       _remainingSeconds = newRemaining < 0 ? 0 : newRemaining;
+    } else if (_isInertiaMode && _inertiaNextPulseAtMillis != null) {
+      // INERTIA: пересчитываем отложенный pulse пропорционально смене масштаба,
+      // чтобы циклы ускорялись/замедлялись без скачков и без зависаний.
+      final now = DateTime.now().millisecondsSinceEpoch;
+      final remaining = _inertiaNextPulseAtMillis! - now;
+      if (remaining > 0 && oldScale > 0) {
+        final newRemaining = (remaining * scale / oldScale).round();
+        _inertiaNextPulseAtMillis = now + newRemaining;
+      }
     } else if (!_isRunning && !_isInertiaMode && !_needsTargetConfirmation) {
       // На паузе/ожидании: подстраиваем отображаемое оставшееся время под новый масштаб.
       _remainingSeconds = _getScaledPhaseDuration(_currentPhaseIndex, _currentPhaseBaseSeconds);
@@ -478,14 +487,16 @@ class TimerProvider with ChangeNotifier {
     _saveState();
   }
 
-  /// Перепланировка следующего pulse INERTIA (рандом 3–6 минут).
+  /// Перепланировка следующего pulse INERTIA (рандом 3–6 минут),
+  /// масштабированного глобальным timeWarpScale (ускоряет/замедляет циклы).
   void _scheduleNextPulse() {
     final random = Random();
     final delayMs = AppConstants.inertiaPulseMinMs +
         random.nextInt(
           AppConstants.inertiaPulseMaxMs - AppConstants.inertiaPulseMinMs + 1,
         );
-    _inertiaNextPulseAtMillis = DateTime.now().millisecondsSinceEpoch + delayMs;
+    final scaledMs = (delayMs * _timeWarpScale).round();
+    _inertiaNextPulseAtMillis = DateTime.now().millisecondsSinceEpoch + scaledMs;
   }
 
   /// Срабатывание pulse INERTIA: мягкий ignite.mp3 (best-effort) + инкремент цикла.
