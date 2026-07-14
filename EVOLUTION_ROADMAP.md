@@ -142,7 +142,7 @@
 ## 🧩 Конечный порядок эволюции (обновленная логика)
 - **Stage 0 (v1.0.0):** Core Mechanic + Inertia + Target Confirmation + Chaos + SFX + Stats + Rank + Paywall UI
 - **Stage 6:** Deep Flow Inertia Controller (auto after Phase 3; pulse 3–6m; 6 cycles; YES 30s; auto → отдых)
-- **Stage 7:** User Scheduler & AUTO-ENGAGE PROTOCOL (THE HIT-LIST) (планировщик + авто-старт по расписанию, ежедневно)
+- **Stage 7:** User Scheduler & AUTO-ENGAGE PROTOCOL (THE HIT-LIST) (планировщик + авто-старт по расписанию, ежедневно) ✅ РЕАЛИЗОВАНО в V1.3
 - **Stage 4:** Реальные платежи (Stripe)
 - **Stage 1:** User Identity (Auth) - может быть после монетизации
 - **Stage 2:** Data Ownership (синхронизация)
@@ -158,8 +158,20 @@
 
 ---
 
-## 🔜 STAGE 7: User Scheduler & AUTO-ENGAGE PROTOCOL (THE HIT-LIST) [TODO]
+## 🟢 STAGE 7: User Scheduler & AUTO-ENGAGE PROTOCOL (THE HIT-LIST) [x] ✅ COMPLETED
 **Суть:** Пользователь планирует время “включить работу” — а приложение само делает авто-старт (вместо ручного нажатия пользователем). Ежедневно повторяется, чтобы не забывал “байпас режим хищника”.
+
+**Статус:** Завершено в рамках Upgrade Pipeline v1.3 (PRD/TECH_SPEC → Version 1.3 - Auto-Start Scheduler «THE HIT-LIST»).
+
+**Фактически реализовано (вышло за рамки/отклонилось от черновика Stage 7):**
+- **Экран THE HIT-LIST** (`HitListScreen`): список слотов (до 10), переключатель `ВКЛЮЧЁН` на каждый слот, выбор HH:mm через ползунки (ЧАС 0–23 / МИН 0–59), добавление/удаление; вход из `SettingsScreen`. Расписание активно, если включён хотя бы один слот.
+- **Авто-старт по расписанию:** `HitListProvider.processScheduledTriggers()` каждые 15с сверяет включённые слоты с текущим `HH:mm` и вызывает `TimerProvider.autoStartFromScheduler(...)`, переводя систему в фазу 0 + `needsTargetConfirmation=true` (оверлей «ЦЕЛЬ НАЙДЕНА?» как при обычном старте).
+- **Защита от конфликтов:** если `timerProvider.isRunning == true` — авто-старт no-op; winner при совпадении времени — слот с минимальным `slotOrdinal`; idempotent-окно `yyyy-MM-dd|HH:mm` исключает дубли в одну минуту (persisted `hitListLastExecutedMinuteWindow`).
+- **🛑 Deviation 1 (звук):** по фидбеку добавлен выделенный sustained-сигнал `AudioService.playScheduleAlarm()` — зацикленный `beep.mp3` ≥ 30 секунд (вместо «тихого» старта из черновика §2). Останавливается на СБРОС/подтверждении цели.
+- **🛑 Deviation 2 (механизм будильника):** AC5 черновика («права как у будильника», авто-старт после выгрузки/ребута) **НЕ выполнен** — реализован in-app poll 15с поверх foreground service, без Android `AlarmManager`/boot-receiver. Авто-старт срабатывает только пока жив процесс.
+- **🛑 Deviation 3 (однократность):** флажок «Repeat daily = однократно» из черновика §4 **не реализован** — все включённые слоты повторяются ежедневно, переключателя однократности нет.
+
+См. TECH_SPEC.md → As-Built Deviations V1.3 (Auto-Start Scheduler «THE HIT-LIST»).
 
 ### 1) UI / Экран “THE HIT-LIST”
 - Новый отдельный экран планировщика:
