@@ -66,6 +66,11 @@
 
 ## 🏁 2026-07-14 — Апгрейд V1.1 (Meta Time Scaling + Deep Flow Inertia Controller) завершён на 100%. Все задачи tasks.json = done.
 
+## 🔧 2026-07-14 (Hotfix по фидбеку) — INERTIA cycle counter + beep + NO path:
+- Уведомление в режиме INERTIA теперь показывает счётчик циклов «Цикл X/6» (`_updateNotification`).
+- При достижении 6-го цикла играет `beep.mp3` ровно один раз (`playDeadManSwitchSound`) и появляется оверлей MAX FLOW (всё ещё в режиме INERTIA).
+- Оверлей MAX FLOW: YES (`confirmMaxFlow`) → продолжение INERTIA + сброс счётчика; NO (`declineMaxFlow`) → немедленный выход в ОТДЫХ; нет ответа за 30с (`_autoExitMaxFlow`) → авто-выход в ОТДЫХ. flutter analyze: No issues found.
+
 ## Технические детали реализации
 
 ### Архитектура

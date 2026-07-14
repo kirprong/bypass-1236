@@ -544,6 +544,13 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin {
                         onTap: () => timer.confirmMaxFlow(),
                         icon: Icons.check_circle,
                       ),
+                      const SizedBox(height: 24),
+                      _buildConfirmationButton(
+                        text: 'NO\nВЫЙТИ В ОТДЫХ',
+                        color: const Color(0xFF666666),
+                        onTap: () => timer.declineMaxFlow(),
+                        icon: Icons.cancel,
+                      ),
                     ],
                   ),
                 ),

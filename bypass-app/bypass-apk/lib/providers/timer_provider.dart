@@ -305,7 +305,10 @@ class TimerProvider with ChangeNotifier {
     
     if (_isInertiaMode) {
       title = '⚡ OVERDRIVE MODE';
-      body = 'Режим инерции активен';
+      final cycle = _inertiaCycleCount > AppConstants.inertiaMaxFlowCycle
+          ? AppConstants.inertiaMaxFlowCycle
+          : _inertiaCycleCount;
+      body = 'Режим инерции активен · Цикл $cycle/${AppConstants.inertiaMaxFlowCycle}';
       progress = 'Прошло: ${formatTime(_inertiaSeconds)}';
     } else {
       title = '${AppConstants.getPhaseName(_currentPhaseIndex)} - ${formatTime(_remainingSeconds)}';
@@ -501,6 +504,8 @@ class TimerProvider with ChangeNotifier {
       _inertiaPendingMaxFlowConfirmUntilMillis =
           DateTime.now().millisecondsSinceEpoch +
               AppConstants.inertiaMaxFlowConfirmSeconds * 1000;
+      // Сигнал beep.mp3 (бип-бип) ровно один раз при достижении лимита
+      _audioService.playDeadManSwitchSound();
     }
 
     // Перепланировка следующего окна (без дублей)
@@ -525,6 +530,17 @@ class TimerProvider with ChangeNotifier {
     debugPrint('TIMER: MAX FLOW подтверждён (YES), INERTIA продолжается');
     notifyListeners();
     _saveState();
+  }
+
+  /// Отклонение MAX FLOW (NO): закрывает overlay и выходит в стандартный ОТДЫХ.
+  void declineMaxFlow() {
+    if (!_isInertiaConfirmShown) return;
+
+    _isInertiaConfirmShown = false;
+    _inertiaPendingMaxFlowConfirmUntilMillis = null;
+
+    debugPrint('TIMER: MAX FLOW отклонён (NO) — выход в ОТДЫХ');
+    stopInertia();
   }
 
   /// Авто-выход из INERTIA по таймауту MAX FLOW (нет YES за 30с) → стандартный ОТДЫХ.
