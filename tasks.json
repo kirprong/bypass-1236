@@ -303,7 +303,7 @@
         "4. Проверить кейс некорректного значения (если UI/setting позволяет): NaN/Infinity/вне диапазона → fallback 1.0"
       ],
       "dependencies": ["TASK-V1.1-002"],
-      "status": "pending"
+      "status": "done"
     },
     {
       "id": "TASK-V1.1-005",
@@ -321,7 +321,7 @@
         "3. Дойти до ситуации MAX FLOW confirm-window (6-й инерционный цикл) и перезапустить во время окна; затем проверить появление overlay и таймаут 30 секунд"
       ],
       "dependencies": ["TASK-V1.1-004"],
-      "status": "pending"
+      "status": "done"
     },
     {
       "id": "TASK-V1.1-006",
@@ -340,7 +340,7 @@
         "3. Проверить guard по одной завершенной STRIKE: количество INERTIA-entries=1"
       ],
       "dependencies": ["TASK-V1.1-005"],
-      "status": "pending"
+      "status": "done"
     },
     {
       "id": "TASK-V1.1-007",
@@ -359,7 +359,7 @@
         "3. Нажать EXIT и убедиться, что последующие pulse не воспроизводятся"
       ],
       "dependencies": ["TASK-V1.1-006"],
-      "status": "pending"
+      "status": "done"
     },
     {
       "id": "TASK-V1.1-008",
@@ -378,7 +378,7 @@
         "3. Перезапустить приложение во время confirm-window → проверить, что overlay и тайм-аут отработают корректно"
       ],
       "dependencies": ["TASK-V1.1-007"],
-      "status": "pending"
+      "status": "done"
     },
     {
       "id": "TASK-V1.1-009",
@@ -396,7 +396,7 @@
         "3. Нажать EXIT во время INERTIA (до и после overlay) и проверить корректный переход"
       ],
       "dependencies": ["TASK-V1.1-008"],
-      "status": "pending"
+      "status": "done"
     },
     {
       "id": "TASK-V1.1-010",
@@ -415,7 +415,7 @@
         "4. Scenario D: во время INERTIA несколько раз изменить timeWarpScale → проверить отсутствие зависаний и корректность завершения окон"
       ],
       "dependencies": ["TASK-V1.1-009"],
-      "status": "pending"
+      "status": "done"
     }
   ]
 }

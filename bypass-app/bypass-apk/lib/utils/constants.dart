@@ -72,6 +72,10 @@ class AppConstants {
   static const int inertiaRestMultiplier =
       1; // 1 минута отдыха за каждые 10 минут инерции
   static const int inertiaRestBase = 360; // Базовые 6 минут отдыха
+  static const int inertiaPulseMinMs = 180000; // 3 минуты - мин. интервал pulse
+  static const int inertiaPulseMaxMs = 360000; // 6 минут - макс. интервал pulse
+  static const int inertiaMaxFlowCycle = 6; // Лимит бездействия до MAX FLOW
+  static const int inertiaMaxFlowConfirmSeconds = 30; // Окно подтверждения YES
 
   // Настройки таймингов
   static const int warningBeforeEndSeconds =

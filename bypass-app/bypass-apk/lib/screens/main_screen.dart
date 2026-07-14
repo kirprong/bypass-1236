@@ -117,6 +117,10 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin {
                 // Агрессивный оверлей подтверждения цели
                 if (timerProvider.needsTargetConfirmation)
                   _buildTargetConfirmationOverlay(timerProvider),
+
+                // Оверлей MAX FLOW confirm (V1.2): только на 6-м цикле инерции
+                if (timerProvider.showMaxFlowConfirm)
+                  _buildMaxFlowOverlay(timerProvider),
               ],
             );
           },
@@ -245,10 +249,10 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin {
             onTap: () => timer.toggle(),
           ),
 
-        // Кнопка СТОП (в инерции)
+        // Кнопка EXIT (в инерции единственный элемент управления)
         if (timer.isInertiaMode) ...[
           _buildMainButton(
-            text: 'ЗАВЕРШИТЬ ИНЕРЦИЮ',
+            text: 'EXIT',
             color: AppConstants.phase4Color,
             textColor: Colors.black,
             onTap: () => timer.stopInertia(),
@@ -452,6 +456,93 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin {
                         color: const Color(0xFF666666),
                         onTap: () => timer.confirmTargetNotFound(),
                         icon: Icons.cancel,
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  /// Оверлей MAX FLOW (V1.2): лимит бездействия инерции.
+  /// Показывается на 6-м цикле; требует YES в течение 30 секунд.
+  Widget _buildMaxFlowOverlay(TimerProvider timer) {
+    return Positioned.fill(
+      child: AnimatedBuilder(
+        animation: _flashAnimation,
+        builder: (context, child) {
+          return Container(
+            color: Colors.black.withValues(alpha: 0.95),
+            child: Stack(
+              children: [
+                Positioned.fill(
+                  child: Container(
+                    decoration: BoxDecoration(
+                      border: Border.all(
+                        color: AppConstants.inertiaColor.withValues(
+                          alpha: _flashAnimation.value,
+                        ),
+                        width: 8,
+                      ),
+                    ),
+                  ),
+                ),
+                Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(
+                        'MAX FLOW REACHED',
+                        style: TextStyle(
+                          fontSize: 44,
+                          fontWeight: FontWeight.w900,
+                          color: AppConstants.inertiaColor.withValues(
+                            alpha: _flashAnimation.value,
+                          ),
+                          letterSpacing: 4,
+                          shadows: [
+                            Shadow(
+                              color: AppConstants.inertiaColor.withValues(
+                                alpha: _flashAnimation.value * 0.8,
+                              ),
+                              blurRadius: 20,
+                            ),
+                          ],
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 16),
+                      Text(
+                        'CONTINUE?',
+                        style: TextStyle(
+                          fontSize: 28,
+                          fontWeight: FontWeight.w700,
+                          color: AppConstants.inertiaColor.withValues(
+                            alpha: _flashAnimation.value * 0.7,
+                          ),
+                          letterSpacing: 3,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 16),
+                      Text(
+                        'Осталось: ${timer.maxFlowConfirmRemainingSeconds}с',
+                        style: TextStyle(
+                          fontSize: 18,
+                          color: AppConstants.textSecondaryColor,
+                          letterSpacing: 2,
+                        ),
+                      ),
+                      const SizedBox(height: 60),
+                      _buildConfirmationButton(
+                        text: 'YES\nПРОДОЛЖИТЬ ПОТОК',
+                        color: const Color(0xFF00FF00),
+                        onTap: () => timer.confirmMaxFlow(),
+                        icon: Icons.check_circle,
                       ),
                     ],
                   ),

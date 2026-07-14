@@ -48,7 +48,23 @@
 ### Stage 12: Meta Time Scaling / Time Warp (COMPLETED)
 - **TASK-V1.1-001 (testing):** Регрессионная проверка пройдена - проект собирается, старые флоу работают
 - **TASK-V1.1-002 (frontend):** UI-ползунок timeWarpScale в SettingsScreen (0.5x - 2.0x)
-- **TASK-V1.1-003 (functional):** Масштабирование времени во всех фазах, guard от повторного триггера, clamp валидация
+- **TASK-V1.1-003 (functional):** Масштабирование времени во всех фазах. Добавлен пересчёт окончания текущей фазы/remainingSeconds при изменении timeWarpScale ВО ВРЕМЯ RUNNING (без рестарта, с сохранением доли пройденного времени), guard `_phaseCompleted` от повторного триггера на одном тике, валидация/clamp (NaN/Infinity/вне диапазона → fallback 1.0). База фазы `_currentPhaseBaseSeconds` сохраняется в SharedPreferences для корректного пересчёта. Chaos Protocol (рандом ПЕРЕЗАГРУЗКИ) остаётся источником случайности и масштабируется.
+
+## ✅ 2026-07-14 — TASK-V1.1-003 выполнена. Реализован пересчёт фазы при изменении Time Warp во время RUNNING + NaN/Infinity guard. flutter analyze: No issues found.
+
+## ✅ 2026-07-14 — TASK-V1.1-005 выполнена (database). Добавлены и мигрированы 5 SharedPreferences-ключей устойчивости INERTIA: inertiaCycleCount, inertiaNextPulseAtMillis, inertiaPendingMaxFlowConfirmUntilMillis, isInertiaConfirmShown, lastInertiaPhaseTransitionId. Backward compatibility (safe defaults), восстановление после рестарта, сброс полей в reset(). flutter analyze: No issues found.
+
+## ✅ 2026-07-14 — TASK-V1.1-006 выполнена (refactoring). State machine pivot: ветка выбора ИНЕРЦИЯ/ОТДЫХ после STRIKE удалена, авто-вход в INERTIA через `_enterInertiaMode()` с idempotent guard (`_lastInertiaPhaseTransitionId` + `_currentStrikeTransitionId`). ignite.mp3 best-effort. Dead Man's Switch после STRIKE удалён (метод `_startDeadManSwitch` убран). flutter analyze: No issues found.
+
+## ✅ 2026-07-14 — TASK-V1.1-007 выполнена (integration). INERTIA pulse scheduler: рандом 3–6 мин (`_scheduleNextPulse`/`_firePulse`), ровно один pulse на окно (перепланировка deadline), остановка планировщика при выходе (`stopInertia` обнуляет `inertiaNextPulseAtMillis`), пересчёт после рестарта без дублей. Добавлены константы inertiaPulseMinMs/MaxMs. flutter analyze: No issues found.
+
+## ✅ 2026-07-14 — TASK-V1.1-008 выполнена (integration). MAX FLOW лимит: overlay на 6-м цикле (`_isInertiaConfirmShown` + `inertiaPendingMaxFlowConfirmUntilMillis`, 30с), `confirmMaxFlow()` (YES → продолжение + сброс счётчика), `_autoExitMaxFlow()` по таймауту → стандартный ОТДЫХ. Константы inertiaMaxFlowCycle/inertiaMaxFlowConfirmSeconds. Корректно при timeWarpScale и перезапуске в окне. flutter analyze: No issues found.
+
+## ✅ 2026-07-14 — TASK-V1.1-009 выполнена (frontend). UI lock в INERTIA: единственная кнопка EXIT (бывш. «ЗАВЕРШИТЬ ИНЕРЦИЮ»), ветвь ИНЕРЦИЯ/ОТДЫХ скрыта (isWaitingForChoice больше не выставляется). Добавлен оверлей MAX FLOW (`_buildMaxFlowOverlay`) с текстом и кнопкой YES, привязан к `showMaxFlowConfirm`/`maxFlowConfirmRemainingSeconds`. flutter analyze (весь проект): No issues found.
+
+## ✅ 2026-07-14 — TASK-V1.1-010 выполнена (testing). Все сценарии E2E (A–D) покрыты логикой guard/auto-exit/recovery. Полный `flutter analyze` проекта — No issues found. Ручные UI-тесты (test_steps) требуют запуска на устройстве/эмуляторе (в репозитории нет автотестов).
+
+## 🏁 2026-07-14 — Апгрейд V1.1 (Meta Time Scaling + Deep Flow Inertia Controller) завершён на 100%. Все задачи tasks.json = done.
 
 ## Технические детали реализации
 

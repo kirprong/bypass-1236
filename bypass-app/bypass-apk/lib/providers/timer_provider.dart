@@ -23,11 +23,21 @@ class TimerProvider with ChangeNotifier {
   bool _hasPlayedWarning = false;
   bool _needsTargetConfirmation = false;
   double _timeWarpScale = AppConstants.timeWarpDefault; // Глобальный масштаб времени
+  int _currentPhaseBaseSeconds =
+      AppConstants.phase1Duration; // Немасштабированная база текущей фазы (для пересчёта)
   bool _phaseCompleted = false; // Guard от повторного триггера перехода фазы
 
   // Временные метки для точности
   int? _targetEndTimeMillis;
   int? _inertiaStartTimeMillis;
+
+  // Поля устойчивости INERTIA после перезапуска (V1.2 / TASK-V1.1-005)
+  int _inertiaCycleCount = 0; // Кол-во завершённых инерционных циклов
+  int? _inertiaNextPulseAtMillis; // Абсолютное время следующего pulse (deadline)
+  int? _inertiaPendingMaxFlowConfirmUntilMillis; // Окно подтверждения MAX FLOW (30с)
+  bool _isInertiaConfirmShown = false; // Показан ли overlay MAX FLOW
+  int? _lastInertiaPhaseTransitionId; // Guard одиночного входа в INERTIA (на STRIKE)
+  int? _currentStrikeTransitionId; // Id завершения текущего STRIKE (для idempotent guard)
 
   final AudioService _audioService = AudioService();
   final NotificationService _notificationService = NotificationService();
@@ -42,6 +52,22 @@ class TimerProvider with ChangeNotifier {
   bool get isWaitingForChoice => _isWaitingForChoice;
   bool get needsTargetConfirmation => _needsTargetConfirmation;
   double get timeWarpScale => _timeWarpScale;
+  int get inertiaCycleCount => _inertiaCycleCount;
+  int? get inertiaNextPulseAtMillis => _inertiaNextPulseAtMillis;
+  int? get inertiaPendingMaxFlowConfirmUntilMillis =>
+      _inertiaPendingMaxFlowConfirmUntilMillis;
+  bool get isInertiaConfirmShown => _isInertiaConfirmShown;
+  int? get lastInertiaPhaseTransitionId => _lastInertiaPhaseTransitionId;
+  bool get showMaxFlowConfirm => _isInertiaConfirmShown;
+  int get maxFlowConfirmRemainingSeconds {
+    if (_inertiaPendingMaxFlowConfirmUntilMillis == null) return 0;
+    final remaining =
+        ((_inertiaPendingMaxFlowConfirmUntilMillis! -
+                    DateTime.now().millisecondsSinceEpoch) /
+                1000)
+            .ceil();
+    return remaining < 0 ? 0 : remaining;
+  }
 
   Color get currentPhaseColor => _isInertiaMode
       ? AppConstants.inertiaColor
@@ -64,8 +90,38 @@ class TimerProvider with ChangeNotifier {
     _statsProvider = statsProvider;
   }
 
+  /// Установка глобального масштаба времени (Meta Time Scaling / Time Warp).
+  /// - Валидирует/клэмпит значение (NaN/Infinity/вне диапазона → fallback 1.0).
+  /// - При изменении ВО ВРЕМЯ RUNNING пересчитывает окончание текущей фазы,
+  ///   сохраняя долю пройденного времени (без рестарта и без зависаний).
+  ///   Guard _phaseCompleted гарантирует единичный авто-переход на завершение фазы.
   void setTimeWarpScale(double scale) {
-    _timeWarpScale = scale.clamp(AppConstants.timeWarpMin, AppConstants.timeWarpMax);
+    // Валидация: NaN/Infinity → fallback; иначе clamp в допустимый диапазон.
+    if (scale.isNaN || scale.isInfinite) {
+      scale = AppConstants.timeWarpDefault;
+    } else {
+      scale = scale.clamp(AppConstants.timeWarpMin, AppConstants.timeWarpMax);
+    }
+
+    final oldScale = _timeWarpScale;
+    _timeWarpScale = scale;
+
+    if (_isRunning && !_isInertiaMode && _targetEndTimeMillis != null) {
+      // Пересчёт окончания текущей фазы без рестарта.
+      // phaseStart восстанавливается из текущего targetEndTimeMillis и старого масштаба,
+      // затем targetEndTimeMillis пересобирается под новый масштаб.
+      final oldScaledMs = (_currentPhaseBaseSeconds * oldScale * 1000).round();
+      final phaseStart = _targetEndTimeMillis! - oldScaledMs;
+      final newScaledMs = (_currentPhaseBaseSeconds * scale * 1000).round();
+      final now = DateTime.now().millisecondsSinceEpoch;
+      _targetEndTimeMillis = phaseStart + newScaledMs;
+      final newRemaining = ((_targetEndTimeMillis! - now) / 1000).ceil();
+      _remainingSeconds = newRemaining < 0 ? 0 : newRemaining;
+    } else if (!_isRunning && !_isInertiaMode && !_needsTargetConfirmation) {
+      // На паузе/ожидании: подстраиваем отображаемое оставшееся время под новый масштаб.
+      _remainingSeconds = _getScaledPhaseDuration(_currentPhaseIndex, _currentPhaseBaseSeconds);
+    }
+
     _saveState();
     notifyListeners();
   }
@@ -98,6 +154,12 @@ class TimerProvider with ChangeNotifier {
       'isWaitingForChoice': _isWaitingForChoice,
       'needsTargetConfirmation': _needsTargetConfirmation,
       'timeWarpScale': _timeWarpScale,
+      'currentPhaseBaseSeconds': _currentPhaseBaseSeconds,
+      'inertiaCycleCount': _inertiaCycleCount,
+      'inertiaNextPulseAtMillis': _inertiaNextPulseAtMillis,
+      'inertiaPendingMaxFlowConfirmUntilMillis': _inertiaPendingMaxFlowConfirmUntilMillis,
+      'isInertiaConfirmShown': _isInertiaConfirmShown,
+      'lastInertiaPhaseTransitionId': _lastInertiaPhaseTransitionId,
     };
     await prefs.setString('bypass_timer_state', jsonEncode(state));
   }
@@ -124,12 +186,32 @@ class TimerProvider with ChangeNotifier {
         if (_timeWarpScale.isNaN || _timeWarpScale.isInfinite) {
           _timeWarpScale = AppConstants.timeWarpDefault;
         }
+        _currentPhaseBaseSeconds =
+            state['currentPhaseBaseSeconds'] ?? AppConstants.getPhaseDuration(_currentPhaseIndex);
+        if (_currentPhaseBaseSeconds < 1) {
+          _currentPhaseBaseSeconds = AppConstants.getPhaseDuration(_currentPhaseIndex);
+        }
+
+        // Поля устойчивости INERTIA (backward compatibility: безопасные default)
+        _inertiaCycleCount = state['inertiaCycleCount'] ?? 0;
+        _inertiaNextPulseAtMillis = state['inertiaNextPulseAtMillis'];
+        _inertiaPendingMaxFlowConfirmUntilMillis =
+            state['inertiaPendingMaxFlowConfirmUntilMillis'];
+        _isInertiaConfirmShown = state['isInertiaConfirmShown'] ?? false;
+        _lastInertiaPhaseTransitionId = state['lastInertiaPhaseTransitionId'];
 
         if (_isRunning) {
           final now = DateTime.now().millisecondsSinceEpoch;
 
           if (_isInertiaMode && _inertiaStartTimeMillis != null) {
             _inertiaSeconds = ((now - _inertiaStartTimeMillis!) / 1000).floor();
+            // Восстановление планировщика pulse (без дублей):
+            // null → планируем заново; просроченный → перепланируем без всплеска.
+            if (_inertiaNextPulseAtMillis == null) {
+              _scheduleNextPulse();
+            } else if (_inertiaNextPulseAtMillis! <= now) {
+              _scheduleNextPulse();
+            }
             _startTimerLoop();
           } else if (_targetEndTimeMillis != null) {
             final remaining = ((_targetEndTimeMillis! - now) / 1000).floor();
@@ -166,6 +248,17 @@ class TimerProvider with ChangeNotifier {
       if (_isInertiaMode) {
         if (_inertiaStartTimeMillis != null) {
           _inertiaSeconds = ((now - _inertiaStartTimeMillis!) / 1000).floor();
+        }
+        // INERTIA pulse scheduler (V1.2): мягкий сигнал каждые 3–6 минут,
+        // ровно один раз на окно (guard через перепланировку deadline).
+        if (_inertiaNextPulseAtMillis != null && now >= _inertiaNextPulseAtMillis!) {
+          _firePulse();
+        }
+        // Таймаут MAX FLOW confirm (30с без YES) → авто-выход в ОТДЫХ
+        if (_isInertiaConfirmShown &&
+            _inertiaPendingMaxFlowConfirmUntilMillis != null &&
+            now >= _inertiaPendingMaxFlowConfirmUntilMillis!) {
+          _autoExitMaxFlow();
         }
       } else {
         if (_targetEndTimeMillis != null) {
@@ -217,7 +310,7 @@ class TimerProvider with ChangeNotifier {
     } else {
       title = '${AppConstants.getPhaseName(_currentPhaseIndex)} - ${formatTime(_remainingSeconds)}';
       body = currentPhaseText;
-      int totalSeconds = AppConstants.getPhaseDuration(_currentPhaseIndex);
+      int totalSeconds = _getScaledPhaseDuration(_currentPhaseIndex);
       int elapsed = totalSeconds - _remainingSeconds;
       progress = 'Прогресс: $elapsed/$totalSeconds сек';
     }
@@ -248,6 +341,9 @@ class TimerProvider with ChangeNotifier {
     if (_isInertiaMode) {
       _inertiaStartTimeMillis = now - (_inertiaSeconds * 1000);
     } else {
+      if (_currentPhaseIndex < 3) {
+        _currentPhaseBaseSeconds = AppConstants.getPhaseDuration(_currentPhaseIndex);
+      }
       _targetEndTimeMillis = now + (_remainingSeconds * 1000);
     }
     
@@ -288,10 +384,17 @@ class TimerProvider with ChangeNotifier {
     _isRunning = false;
     _currentPhaseIndex = 0;
     _remainingSeconds = _getScaledPhaseDuration(0, AppConstants.phase1Duration);
+    _currentPhaseBaseSeconds = AppConstants.phase1Duration;
     _isInertiaMode = false;
     _inertiaSeconds = 0;
     _targetEndTimeMillis = null;
     _inertiaStartTimeMillis = null;
+    _inertiaCycleCount = 0;
+    _inertiaNextPulseAtMillis = null;
+    _inertiaPendingMaxFlowConfirmUntilMillis = null;
+    _isInertiaConfirmShown = false;
+    _lastInertiaPhaseTransitionId = null;
+    _currentStrikeTransitionId = null;
     _isWaitingForChoice = false;
     _needsTargetConfirmation = false;
     _hasPlayedWarning = false;
@@ -333,7 +436,106 @@ class TimerProvider with ChangeNotifier {
     }
   }
 
-/// Остановка инерции и переход к отдыху
+  /// Автоматический вход в режим INERTIA (V1.2) сразу после завершения STRIKE.
+  /// Не требует выбора пользователя. Аудио (ignite.mp3) — best-effort,
+  /// переход происходит независимо от успеха воспроизведения.
+  void _enterInertiaMode() {
+    _stopDeadManSwitch();
+    _audioService.stopLoopingBeep();
+    _isWaitingForChoice = false;
+    _needsTargetConfirmation = false;
+
+    _isInertiaMode = true;
+    _inertiaSeconds = 0;
+    _inertiaStartTimeMillis = DateTime.now().millisecondsSinceEpoch;
+    _inertiaCycleCount = 0;
+    _isInertiaConfirmShown = false;
+    _inertiaPendingMaxFlowConfirmUntilMillis = null;
+    _inertiaNextPulseAtMillis = null;
+    _hasPlayedWarning = false;
+    _phaseCompleted = false;
+
+    if (!_isRunning) {
+      _isRunning = true;
+    }
+
+    // best-effort аудио: переход не зависит от ошибок audio
+    _audioService.playInertiaSound();
+
+    // Планируем первый pulse (3–6 минут)
+    _scheduleNextPulse();
+
+    _notificationService.showSimpleNotification(
+      title: '⚡ OVERDRIVE активирован!',
+      body: 'Режим инерции запущен автоматически',
+    );
+
+    _startTimerLoop();
+    notifyListeners();
+    _saveState();
+  }
+
+  /// Перепланировка следующего pulse INERTIA (рандом 3–6 минут).
+  void _scheduleNextPulse() {
+    final random = Random();
+    final delayMs = AppConstants.inertiaPulseMinMs +
+        random.nextInt(
+          AppConstants.inertiaPulseMaxMs - AppConstants.inertiaPulseMinMs + 1,
+        );
+    _inertiaNextPulseAtMillis = DateTime.now().millisecondsSinceEpoch + delayMs;
+  }
+
+  /// Срабатывание pulse INERTIA: мягкий ignite.mp3 (best-effort) + инкремент цикла.
+  /// Перепланирует следующий pulse, гарантируя ровно одно срабатывание на окно.
+  void _firePulse() {
+    // Звук проигрывается только пока активен режим INERTIA
+    _audioService.playInertiaSound();
+
+    // 1 инерционный цикл на каждое срабатывание pulse
+    _inertiaCycleCount++;
+
+    // Лимит бездействия MAX FLOW: на 6-м цикле показываем overlay ровно один раз
+    if (_inertiaCycleCount >= AppConstants.inertiaMaxFlowCycle &&
+        !_isInertiaConfirmShown) {
+      _isInertiaConfirmShown = true;
+      _inertiaPendingMaxFlowConfirmUntilMillis =
+          DateTime.now().millisecondsSinceEpoch +
+              AppConstants.inertiaMaxFlowConfirmSeconds * 1000;
+    }
+
+    // Перепланировка следующего окна (без дублей)
+    _scheduleNextPulse();
+
+    debugPrint(
+      'TIMER: INERTIA pulse #$_inertiaCycleCount, следующий в $_inertiaNextPulseAtMillis',
+    );
+    notifyListeners();
+    _saveState();
+  }
+
+  /// Подтверждение MAX FLOW (YES): закрывает overlay, продолжает INERTIA,
+  /// сбрасывает счётчик бездействия (лимит отсчитывается заново).
+  void confirmMaxFlow() {
+    if (!_isInertiaConfirmShown) return;
+
+    _isInertiaConfirmShown = false;
+    _inertiaPendingMaxFlowConfirmUntilMillis = null;
+    _inertiaCycleCount = 0;
+
+    debugPrint('TIMER: MAX FLOW подтверждён (YES), INERTIA продолжается');
+    notifyListeners();
+    _saveState();
+  }
+
+  /// Авто-выход из INERTIA по таймауту MAX FLOW (нет YES за 30с) → стандартный ОТДЫХ.
+  void _autoExitMaxFlow() {
+    debugPrint('TIMER: MAX FLOW таймаут — авто-выход в ОТДЫХ');
+    _isInertiaConfirmShown = false;
+    _inertiaPendingMaxFlowConfirmUntilMillis = null;
+    stopInertia();
+  }
+
+  /// Остановка инерции и переход к отдыху
   void stopInertia() {
     if (!_isInertiaMode) return;
 
@@ -345,12 +547,18 @@ class TimerProvider with ChangeNotifier {
     _isInertiaMode = false;
     _currentPhaseIndex = 3;
 
+    // Остановка планировщика pulse и очистка окна MAX FLOW при выходе из INERTIA
+    _inertiaNextPulseAtMillis = null;
+    _inertiaPendingMaxFlowConfirmUntilMillis = null;
+    _isInertiaConfirmShown = false;
+
     int extraRestSeconds = (_inertiaSeconds / 600).floor() * 60;
 
     final random = Random();
     int baseRecoverySeconds = AppConstants.phase4MinDuration +
         random.nextInt(AppConstants.phase4MaxDuration - AppConstants.phase4MinDuration + 1);
 
+    _currentPhaseBaseSeconds = baseRecoverySeconds + extraRestSeconds;
     _remainingSeconds = _getScaledPhaseDuration(3, baseRecoverySeconds + extraRestSeconds);
 
     debugPrint('🎲 RECOVERY после инерции: Базовая = $baseRecoverySeconds сек, бонус = $extraRestSeconds сек, scaled = $_remainingSeconds сек');
@@ -394,6 +602,7 @@ class TimerProvider with ChangeNotifier {
     int baseRecoverySeconds = AppConstants.phase4MinDuration +
         random.nextInt(AppConstants.phase4MaxDuration - AppConstants.phase4MinDuration + 1);
 
+    _currentPhaseBaseSeconds = baseRecoverySeconds;
     _remainingSeconds = _getScaledPhaseDuration(3, baseRecoverySeconds);
 
     debugPrint('🎲 RECOVERY: Случайная длительность = $baseRecoverySeconds сек, scaled = $_remainingSeconds сек (${_remainingSeconds ~/ 60} мин)');
@@ -442,6 +651,11 @@ class TimerProvider with ChangeNotifier {
     // АВТОМАТИЧЕСКИЕ ПЕРЕХОДЫ: 1 → 2
     if (_currentPhaseIndex < 2) {
       _currentPhaseIndex++;
+      _currentPhaseBaseSeconds = AppConstants.getPhaseDuration(_currentPhaseIndex);
+      // Сброс guard входа в INERTIA при старте новой фазы STRIKE
+      if (_currentPhaseIndex == 2) {
+        _currentStrikeTransitionId = null;
+      }
       _remainingSeconds = _getScaledPhaseDuration(_currentPhaseIndex);
       _hasPlayedWarning = false;
       _phaseCompleted = false;
@@ -465,29 +679,27 @@ class TimerProvider with ChangeNotifier {
       return;
     }
 
-    // Фаза 2 (THE STRIKE) завершена → ОСТАНАВЛИВАЕМ и ждём выбора
+    // Фаза 2 (THE STRIKE) завершена → автоматический вход в INERTIA (V1.2).
+    // Ветка выбора ИНЕРЦИЯ/ОТДЫХ удалена. Idempotent guard от повторного входа
+    // на одно завершение STRIKE (lastInertiaPhaseTransitionId).
     if (_currentPhaseIndex == 2) {
-      _isRunning = false;
-      _timer?.cancel();
+      // Guard: если уже в INERTIA — не дублируем вход
+      if (_isInertiaMode) {
+        debugPrint('TIMER: Фаза 2 уже в INERTIA, пропуск повторного входа');
+        return;
+      }
+      _currentStrikeTransitionId ??= (_lastInertiaPhaseTransitionId ?? 0) + 1;
+      if (_lastInertiaPhaseTransitionId == _currentStrikeTransitionId) {
+        debugPrint('TIMER: INERTIA уже активирована для transition $_lastInertiaPhaseTransitionId, пропуск');
+        return;
+      }
+      _lastInertiaPhaseTransitionId = _currentStrikeTransitionId;
+
       _targetEndTimeMillis = null;
-      _isWaitingForChoice = true;
+      _timer?.cancel();
 
-      // Запускаем зацикленный beep.mp3 на 20 минут
-      _audioService.startLoopingBeep();
-      
-      // Уведомление о выборе
-      _notificationService.showSimpleNotification(
-        title: '⚡ Выбор режима',
-        body: 'Инерция или отдых? У вас 30 секунд',
-      );
-
-      // Запускаем Dead Man's Switch (30 секунд)
-      _startDeadManSwitch();
-
-      debugPrint('TIMER: Фаза 2 завершена. Ожидание выбора (ИНЕРЦИЯ/ОТДЫХ)');
-
-      notifyListeners();
-      _saveState();
+      debugPrint('TIMER: Фаза 2 завершена. Авто-вход в INERTIA (transition $_lastInertiaPhaseTransitionId)');
+      _enterInertiaMode();
       return;
     }
 
@@ -504,6 +716,7 @@ class TimerProvider with ChangeNotifier {
 
       _currentPhaseIndex = 0;
       _remainingSeconds = _getScaledPhaseDuration(0, AppConstants.phase1Duration);
+      _currentPhaseBaseSeconds = AppConstants.phase1Duration;
       _hasPlayedWarning = false;
       _isWaitingForChoice = false;
       _needsTargetConfirmation = false;
@@ -520,31 +733,6 @@ class TimerProvider with ChangeNotifier {
     }
   }
 
-  /// Dead Man's Switch - если нет выбора 30 секунд
-  void _startDeadManSwitch() {
-    _stopDeadManSwitch(); // Останавливаем предыдущий если был
-
-    int secondsLeft = AppConstants.deadManSwitchTimeout;
-
-    _deadManSwitchTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
-      secondsLeft--;
-
-      // Повторяющийся beep каждую секунду
-      if (secondsLeft <= AppConstants.deadManSwitchTimeout) {
-        _audioService.playDeadManSwitchSound(); // beep.mp3
-      }
-
-      debugPrint('Dead Man\'s Switch: $secondsLeft секунд до авто-отдыха');
-
-      if (secondsLeft <= 0) {
-        // Автоматически переходим к отдыху
-        debugPrint('Dead Man\'s Switch сработал! Автоматический переход к ОТДЫХУ');
-        _stopDeadManSwitch();
-        startRecovery();
-      }
-    });
-  }
-
   void _stopDeadManSwitch() {
     _deadManSwitchTimer?.cancel();
     _deadManSwitchTimer = null;
@@ -557,6 +745,7 @@ class TimerProvider with ChangeNotifier {
     _audioService.stopLoopingBeep();
     _needsTargetConfirmation = false;
     _currentPhaseIndex = 1;
+    _currentPhaseBaseSeconds = AppConstants.getPhaseDuration(1);
     _remainingSeconds = _getScaledPhaseDuration(1, AppConstants.phase2Duration);
     _hasPlayedWarning = false;
     _phaseCompleted = false;
@@ -590,6 +779,7 @@ class TimerProvider with ChangeNotifier {
     );
 
     _currentPhaseIndex = 0;
+    _currentPhaseBaseSeconds = AppConstants.phase1Duration;
     _remainingSeconds = _getScaledPhaseDuration(0, AppConstants.phase1Duration);
     _hasPlayedWarning = false;
     _isWaitingForChoice = false;
