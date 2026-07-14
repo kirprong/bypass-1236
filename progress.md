@@ -44,6 +44,17 @@
 - Full on-device E2E (restart recovery, winner ordinal, isRunning conflict) is covered
   by logic + unit tests; remaining manual device walk-throughs are pending human QA.
 
+## 2026-07-15 — Schedule trigger: sustained audio cue (>=30s)
+- User feedback: on HIT-LIST auto-start the audio must be a sustained cue, not a single
+  short `start.mp3`.
+- Added `AudioService.playScheduleAlarm()` / `stopScheduleAlarm()`: dedicated looping
+  `beep.mp3` player with a self-stop timer guaranteeing **>= 30 seconds** of sound,
+  independent of the Target Confirmation looping beep (no double playback).
+- `TimerProvider.autoStartFromScheduler` now triggers `playScheduleAlarm()` (best-effort,
+  swallowed async errors). Alarm is also stopped on `reset()` and on target
+  confirm (ДА/НЕТ) for clean teardown.
+- `flutter analyze` → No issues found; `flutter test` → 4/4 pass.
+
 ## Verification
 - `flutter analyze` → No issues found.
 - `flutter test test/hit_list_test.dart` → All tests passed (4/4).

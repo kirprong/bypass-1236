@@ -409,6 +409,7 @@ class TimerProvider with ChangeNotifier {
     _timer?.cancel();
     _deadManSwitchTimer?.cancel();
     _audioService.stopLoopingBeep();
+    _audioService.stopScheduleAlarm();
     _isRunning = false;
     _currentPhaseIndex = 0;
     _remainingSeconds = _getScaledPhaseDuration(0, AppConstants.phase1Duration);
@@ -493,6 +494,9 @@ class TimerProvider with ChangeNotifier {
     // Best-effort побочные эффекты: независимо от ошибок audio/notification.
     // Обёртка глушит как синхронные, так и асинхронные исключения плагинов.
     _safePlatform(() => _audioService.playStartSound());
+    // Сигнал срабатывания расписания HIT-LIST: непрерывный beep >= 30 секунд
+    // (вместо одиночного короткого звука старта).
+    _safePlatform(() => _audioService.playScheduleAlarm());
     _safePlatform(() => ForegroundService.stop());
     _safePlatform(() => _notificationService.hideNotification());
 
@@ -860,6 +864,7 @@ class TimerProvider with ChangeNotifier {
     if (!_needsTargetConfirmation) return;
 
     _audioService.stopLoopingBeep();
+    _audioService.stopScheduleAlarm();
     _needsTargetConfirmation = false;
     _currentPhaseIndex = 1;
     _currentPhaseBaseSeconds = AppConstants.getPhaseDuration(1);
@@ -888,6 +893,7 @@ class TimerProvider with ChangeNotifier {
     if (!_needsTargetConfirmation) return;
 
     _audioService.stopLoopingBeep();
+    _audioService.stopScheduleAlarm();
     _needsTargetConfirmation = false;
 
     _notificationService.showSimpleNotification(

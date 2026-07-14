@@ -220,7 +220,7 @@ class AudioService {
     try {
       _loopingBeepTimer?.cancel();
       _loopingBeepTimer = null;
-      
+
       if (_loopingBeepPlayer != null) {
         await _loopingBeepPlayer!.stop();
         await _loopingBeepPlayer!.dispose();
@@ -232,10 +232,58 @@ class AudioService {
     }
   }
 
+  // Отдельный плеер/таймер для сигнала срабатывания расписания HIT-LIST,
+  // чтобы не конфликтовать с зацикленным beep оверлея Target Confirmation.
+  AudioPlayer? _scheduleAlarmPlayer;
+  Timer? _scheduleAlarmTimer;
+
+  /// Сигнал срабатывания расписания HIT-LIST (V1.3).
+  /// Непрерывный beep ДЛИТЕЛЬНОСТЬЮ НЕ МЕНЕЕ 30 СЕКУНД (зациклен + авто-стоп).
+  /// Best-effort: при ошибках аудио/инициализации — тихий выход.
+  Future<void> playScheduleAlarm() async {
+    if (!_isInitialized) {
+      debugPrint('⚠️ AudioService not initialized - skipping schedule alarm');
+      return;
+    }
+    try {
+      await stopScheduleAlarm();
+      debugPrint('🔊 Starting HIT-LIST schedule alarm (>=30s)...');
+      _scheduleAlarmPlayer = AudioPlayer();
+      await _scheduleAlarmPlayer!.setAsset(AppConstants.soundWarning);
+      await _scheduleAlarmPlayer!.setLoopMode(LoopMode.one);
+      await _scheduleAlarmPlayer!.setVolume(1.0);
+      await _scheduleAlarmPlayer!.play();
+      // Гарантируем минимум 30 секунд звучания, затем авто-стоп.
+      _scheduleAlarmTimer = Timer(const Duration(seconds: 30), () {
+        debugPrint('⏰ 30s schedule alarm elapsed, stopping');
+        stopScheduleAlarm();
+      });
+    } catch (e) {
+      debugPrint('⚠️ Error playing schedule alarm: $e');
+    }
+  }
+
+  /// Остановка сигнала расписания HIT-LIST (например, при СБРОС/подтверждении).
+  Future<void> stopScheduleAlarm() async {
+    try {
+      _scheduleAlarmTimer?.cancel();
+      _scheduleAlarmTimer = null;
+      if (_scheduleAlarmPlayer != null) {
+        await _scheduleAlarmPlayer!.stop();
+        await _scheduleAlarmPlayer!.dispose();
+        _scheduleAlarmPlayer = null;
+        debugPrint('🔇 Schedule alarm stopped');
+      }
+    } catch (e) {
+      debugPrint('⚠️ Error stopping schedule alarm: $e');
+    }
+  }
+
   /// Освобождение ресурсов
   Future<void> dispose() async {
     try {
       await stopLoopingBeep();
+      await stopScheduleAlarm();
       for (final player in _players.values) {
         await player.dispose();
       }
