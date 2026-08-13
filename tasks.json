@@ -317,8 +317,8 @@
       ],
       "test_steps": [
         "1. Войти в INERTIA и перезапустить приложение во время ожидания ближайшего pulse",
-        "2. Проверить, что следующий pulse происходит один раз и лежит в заданном диапазоне 3–6 минут",
-        "3. Дойти до ситуации MAX FLOW confirm-window (6-й инерционный цикл) и перезапустить во время окна; затем проверить появление overlay и таймаут 30 секунд"
+        "2. Проверить, что следующий pulse происходит один раз и лежит в заданном диапазоне 2–3 минуты",
+        "3. Дойти до ситуации MAX FLOW confirm-window (3-й инерционный цикл) и перезапустить во время окна; затем проверить появление overlay и таймаут 30 секунд"
       ],
       "dependencies": ["TASK-V1.1-004"],
       "status": "done"
@@ -346,9 +346,9 @@
       "id": "TASK-V1.1-007",
       "category": "integration",
       "priority": "high",
-      "description": "INERTIA pulse scheduler: интервал 3–6 минут, рандомизация, отсутствие дублей, корректная остановка планировщика при выходе из INERTIA.",
+      "description": "INERTIA pulse scheduler: интервал 2–3 минуты, рандомизация, отсутствие дублей, корректная остановка планировщика при выходе из INERTIA.",
       "acceptance_criteria": [
-        "Интервал между pulse внутри INERTIA: 3–6 минут (рандом внутри диапазона)",
+        "Интервал между pulse внутри INERTIA: 2–3 минуты (рандом внутри диапазона)",
         "ignite.mp3 проигрывается только пока активен режим INERTIA",
         "После выхода из INERTIA (EXIT / auto-exit) новые pulse не планируются и не срабатывают",
         "Если inertiaNextPulseAtMillis=null после рестарта — планировщик пересчитывается при первом входе в INERTIA"
@@ -365,9 +365,9 @@
       "id": "TASK-V1.1-008",
       "category": "integration",
       "priority": "high",
-      "description": "MAX FLOW лимит и confirm: inertiaCycleCount==6 → overlay 'MAX FLOW REACHED. CONTINUE?' + 30s YES window → авто-выход в стандартный ОТДЫХ при отсутствии YES.",
+      "description": "MAX FLOW лимит и confirm: inertiaCycleCount==3 → overlay 'MAX FLOW REACHED. CONTINUE?' + 30s YES window → авто-выход в стандартный ОТДЫХ при отсутствии YES.",
       "acceptance_criteria": [
-        "inertiaCycleCount достигает 6 и срабатывает overlay ровно один раз",
+        "inertiaCycleCount достигает 3 и срабатывает overlay ровно один раз",
         "Окно YES длится 30 секунд; при YES overlay закрывается и INERTIA продолжает работу",
         "Если YES не нажата в течение 30 секунд — авто-переход в стандартный recovery/rest flow",
         "Логика корректна при timeWarpScale и при перезапуске в середине confirm-window"
@@ -387,7 +387,7 @@
       "description": "UI lock в INERTIA: показывать только кнопку EXIT и (только при MAX FLOW) overlay confirm; остальная ветвь INERTIA/ОТДЫХ отсутствует.",
       "acceptance_criteria": [
         "В режиме INERTIA доступны только элементы управления EXIT",
-        "Overlay MAX FLOW появляется только на 6-м цикле и содержит кнопку/действие YES",
+        "Overlay MAX FLOW появляется только на 3-м цикле и содержит кнопку/действие YES",
         "EXIT корректно завершает INERTIA, останавливает pulse/confirm и переводит в standard REST/RECOVERY flow"
       ],
       "test_steps": [

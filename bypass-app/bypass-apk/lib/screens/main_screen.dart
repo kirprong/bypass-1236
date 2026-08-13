@@ -118,7 +118,7 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin {
                 if (timerProvider.needsTargetConfirmation)
                   _buildTargetConfirmationOverlay(timerProvider),
 
-                // Оверлей MAX FLOW confirm (V1.2): только на 6-м цикле инерции
+                // Оверлей MAX FLOW confirm (V1.2): только на 3-м цикле инерции
                 if (timerProvider.showMaxFlowConfirm)
                   _buildMaxFlowOverlay(timerProvider),
               ],
@@ -469,7 +469,7 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin {
   }
 
   /// Оверлей MAX FLOW (V1.2): лимит бездействия инерции.
-  /// Показывается на 6-м цикле; требует YES в течение 30 секунд.
+  /// Показывается на 3-м цикле; требует YES в течение 30 секунд.
   Widget _buildMaxFlowOverlay(TimerProvider timer) {
     return Positioned.fill(
       child: AnimatedBuilder(

@@ -274,7 +274,7 @@ class TimerProvider with ChangeNotifier {
         if (_inertiaStartTimeMillis != null) {
           _inertiaSeconds = ((now - _inertiaStartTimeMillis!) / 1000).floor();
         }
-        // INERTIA pulse scheduler (V1.2): мягкий сигнал каждые 3–6 минут,
+        // INERTIA pulse scheduler (V1.2): мягкий сигнал каждые 2–3 минуты,
         // ровно один раз на окно (guard через перепланировку deadline).
         if (_inertiaNextPulseAtMillis != null && now >= _inertiaNextPulseAtMillis!) {
           _firePulse();
@@ -568,7 +568,7 @@ class TimerProvider with ChangeNotifier {
     // best-effort аудио: переход не зависит от ошибок audio
     _audioService.playInertiaSound();
 
-    // Планируем первый pulse (3–6 минут)
+    // Планируем первый pulse (2–3 минут)
     _scheduleNextPulse();
 
     _notificationService.showSimpleNotification(
@@ -581,7 +581,7 @@ class TimerProvider with ChangeNotifier {
     _saveState();
   }
 
-  /// Перепланировка следующего pulse INERTIA (рандом 3–6 минут),
+  /// Перепланировка следующего pulse INERTIA (рандом 2–3 минут),
   /// масштабированного глобальным timeWarpScale (ускоряет/замедляет циклы).
   void _scheduleNextPulse() {
     final random = Random();
@@ -602,7 +602,7 @@ class TimerProvider with ChangeNotifier {
     // 1 инерционный цикл на каждое срабатывание pulse
     _inertiaCycleCount++;
 
-    // Лимит бездействия MAX FLOW: на 6-м цикле показываем overlay ровно один раз
+    // Лимит бездействия MAX FLOW: на 3-м цикле показываем overlay ровно один раз
     if (_inertiaCycleCount >= AppConstants.inertiaMaxFlowCycle &&
         !_isInertiaConfirmShown) {
       _isInertiaConfirmShown = true;
