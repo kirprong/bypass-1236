@@ -442,7 +442,7 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin {
                       
                       // Кнопка ДА (Зеленая/Неоновая)
                       _buildConfirmationButton(
-                        text: 'ДА. ДЕЛАЙ ЭТО\nПРЯМО ЗДЕСЬ И СЕЙЧАС!',
+                        text: 'ДА. ДЕЛАЙ ЭТО!',
                         color: const Color(0xFF00FF00),
                         onTap: () => timer.confirmDecisionYes(),
                         icon: Icons.check_circle,
