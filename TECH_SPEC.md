@@ -6,7 +6,7 @@
 1234 Timer — это мобильное приложение (Flutter) с 4 фазами и множеством психологических микромеханик:
 - **THINKING (60s)** → **PREP (120s)** → **STRIKE (180s)** → **ПЕРЕЗАГРУЗКА (60-240s случайно)**
 
-Состояния: **Ready/Idle**, **Running**, **Paused**, **WaitingForChoice**, **TargetConfirmation**
+Состояния: **Ready/Idle**, **Running**, **Paused**, **WaitingForChoice**, **DecisionConfirmation**
 
 ```mermaid
 graph TD
@@ -23,7 +23,7 @@ graph TD
 - Используем `DateTime.now().millisecondsSinceEpoch` как источник времени
 - Храним:
   - `phaseIndex`: 0-3 (THINKING, PREP, STRIKE, RECOVERY)
-  - `status`: через поле `isRunning` (true/false) + `isWaitingForChoice` + `isInertiaMode` + `needsTargetConfirmation`
+  - `status`: через поле `isRunning` (true/false) + `isWaitingForChoice` + `isInertiaMode` + `needsDecisionConfirmation`
   - `remainingMs` → `remainingSeconds`: integer секунды
   - `phaseEndsAt` → `targetEndTimeMillis`: absolute timestamp
   - `lastTickId` → `_timer`: Timer.periodic(200ms)
@@ -47,7 +47,7 @@ erDiagram
         int remainingSeconds
         int inertiaSeconds
         bool isWaitingForChoice
-        bool needsTargetConfirmation
+        bool needsDecisionConfirmation
         bool hasPlayedWarning
     }
     
@@ -71,7 +71,7 @@ erDiagram
   "remainingSeconds": 60,
   "inertiaSeconds": 0,
   "isWaitingForChoice": false,
-  "needsTargetConfirmation": false
+  "needsDecisionConfirmation": false
 }
 ```
 
@@ -90,7 +90,7 @@ erDiagram
 
 | Index | Название | Длительность | Цвет | Текст |
 |-------|----------|--------------|------|-------|
-| 0 | THINKING | 60s (1 мин) | #00D4FF (неоновый синий) | "ЦЕЛЬ?" |
+| 0 | THINKING | 60s (1 мин) | #00D4FF (неоновый синий) | "РЕШЕНИЕ?" |
 | 1 | PREP | 120s (2 мин) | #FF8A00 (оранжевый) | "ОРУЖИЕ К БОЮ!" |
 | 2 | STRIKE | 180s (3 мин) | #FF0000 (красный) | "УНИЧТОЖАЙ" |
 | 3 | ПЕРЕЗАГРУЗКА | 60-240s (случайно) | #0A1E5C (глубокий синий) | "БУДЬ ГОТОВ ВСЕГДА" |
@@ -105,7 +105,7 @@ bool _isInertiaMode = false;       // Режим инерции активен
 int _inertiaSeconds = 0;          // Время в инерции
 bool _isWaitingForChoice = false;  // Ожидание выбора (ИНЕРЦИЯ/ОТДЫХ)
 bool _hasPlayedWarning = false;    // Флаг предупреждения
-bool _needsTargetConfirmation = false; // Требуется подтверждение цели
+bool _needsDecisionConfirmation = false; // Требуется подтверждение решения
 int? _targetEndTimeMillis;        // Абсолютное время окончания
 int? _inertiaStartTimeMillis;     // Время старта инерции
 Timer? _timer;                     // Основной таймер
@@ -128,7 +128,7 @@ Timer? _deadManSwitchTimer;       // Dead Man's Switch таймер
 - Скрытие уведомлений
 
 **Auto-transition при окончании фазы:**
-- Фаза 0 (THINKING): остановка, `needsTargetConfirmation = true`, зацикленный beep
+- Фаза 0 (THINKING): остановка, `needsDecisionConfirmation = true`, зацикленный beep
 - Фазы 0-1 (THINKING→PREP): автоматический переход
 - Фазы 1-2 (PREP→STRIKE): автоматический переход
 - Фаза 2 (STRIKE): остановка, `isWaitingForChoice = true`, Dead Man's Switch (30s)
@@ -145,7 +145,7 @@ Timer? _deadManSwitchTimer;       // Dead Man's Switch таймер
 - Кнопка СБРОС (при паузе)
 
 **Overlays:**
-- Target Confirmation Overlay: "ЦЕЛЬ НАЙДЕНА?" (после THINKING)
+- Decision Confirmation Overlay: "РЕШЕНИЕ ПРИНЯТО?" (после THINKING)
 - Инерция Mode: замена таймера на секунды инерции
 
 ---
@@ -301,7 +301,7 @@ SLAYER (10000) → WARLORD (15000) → OVERLORD (22500) → APEX PREDATOR (33750
 ### As-Built Deviations — V1.3 (Auto-Start Scheduler «THE HIT-LIST»)
 
 1. **Добавлен выделенный звуковой сигнал срабатывания расписания (`playScheduleAlarm`).**
-   В изначальном blueprint roadmap Stage 7 (§2) прямо сказано: «НИКАКИХ дополнительных сигналов/уведомлений пользователю не требуется … никаких beep/месседжей». По факту (progress.md, 2026-07-15, пользовательский фидбек) при HIT-LIST авто-старте воспроизводится **отдельный непрерывный `beep.mp3` длительностью ≥ 30 секунд** через `AudioService.playScheduleAlarm()` / `stopScheduleAlarm()`. Это явное отклонение от «тихого» старта из blueprint; в V1.3-спеке поведение скорректировано на «best-effort звук как при обычном старте» + данный sustained-сигнал. Сигнал останавливается на `reset()` и на подтверждении цели (ДА/НЕТ) и не дублируется с зацикленным beep оверлея Target Confirmation.
+   В изначальном blueprint roadmap Stage 7 (§2) прямо сказано: «НИКАКИХ дополнительных сигналов/уведомлений пользователю не требуется … никаких beep/месседжей». По факту (progress.md, 2026-07-15, пользовательский фидбек) при HIT-LIST авто-старте воспроизводится **отдельный непрерывный `beep.mp3` длительностью ≥ 30 секунд** через `AudioService.playScheduleAlarm()` / `stopScheduleAlarm()`. Это явное отклонение от «тихого» старта из blueprint; в V1.3-спеке поведение скорректировано на «best-effort звук как при обычном старте» + данный sustained-сигнал. Сигнал останавливается на `reset()` и на подтверждении решения (ДА/НЕТ) и не дублируется с зацикленным beep оверлея Decision Confirmation.
 2. **Триггер — внутриприложный poll, а не системный будильник.**
    Roadmap Stage 7 (§2, AC5) требовал «права уровня как у будильника … чтобы авто-старт происходил даже если приложение выключено/в фоне». Реализовано через `Timer.periodic(15s)` внутри `HitListProvider` поверх времени жизни foreground service. Нет Android `AlarmManager` (exact alarm), нет `BOOT_COMPLETED`-receiver, нет auto-start после перезагрузки. AC5 roadmap фактически **не выполнен**: авто-старт работает только пока процесс жив. Idempotent-ключ `hitListLastExecutedMinuteWindow` гарантирует отсутствие дублей при повторных poll/рестартах, но не компенсирует пропуск срабатывания, если приложение было выгружено в момент HH:mm.
 3. **Режим «Repeat daily = однократно» НЕ реализован.**
@@ -496,7 +496,7 @@ Backend/API отсутствует. Изменение — в *контракт�
 
 **Точка интеграции с TimerProvider**
 - Планировщик вызывает “мягкое действие” в `TimerProvider`:
-  - переводит систему в сценарий **фаза 0 → ожидание подтверждения цели** (“ЦЕЛЬ?”), как при обычном ручном нажатии/старте.
+  - переводит систему в сценарий **фаза 0 → ожидание подтверждения решения** (“РЕШЕНИЕ?”), как при обычном ручном нажатии/старте.
 - При любом автозапуске соблюдается guard:
   - если `isRunning == true` — планировщик делает no-op (ничего не меняет).
 
@@ -555,7 +555,7 @@ Backend/API отсутствует. Изменение — в контракта
 - `autoStartFromScheduler(triggerKey, slotId, scheduledAtLocalMillis)`:
   - цель: инициировать цикл в состоянии:
     - `currentPhaseIndex = 0`
-    - `needsTargetConfirmation = true` (overlay “ЦЕЛЬ НАЙДЕНА?” ожидает YES/NO как в стандартной логике старта THINKING → Target Confirmation)
+    - `needsDecisionConfirmation = true` (overlay “РЕШЕНИЕ ПРИНЯТО?” ожидает YES/NO как в стандартной логике старта THINKING → Decision Confirmation)
   - должен быть idempotent (AC1.3.5):
     - если `triggerKey` уже был выполнен в этот день/в это HH:mm для `slotId` → no-op.
   - должен обеспечивать “один раз на окно” (AC1.3.3):
@@ -565,7 +565,7 @@ Backend/API отсутствует. Изменение — в контракта
 - Включить ту же best-effort инициализацию звука/уведомлений, что и для обычного старта.
 - Дополнительно воспроизводится **выделенный сигнал срабатывания расписания** (см. As-Built Deviations V1.3, п.1): `AudioService.playScheduleAlarm()` — зацикленный `beep.mp3`, гарантированно ≥ 30 секунд. Это отличает HIT-LIST-автостарт от обычного ручного старта (который играет только короткий `start.mp3`).
 - Ошибки аудио/уведомлений не ломают state machine: переход в фазу 0 должен происходить независимо от успеха воспроизведения.
-- Сигнал `playScheduleAlarm()` корректно останавливается при `reset()` и при подтверждении цели (ДА/НЕТ) — без дублей с зацикленным beep оверлея Target Confirmation.
+- Сигнал `playScheduleAlarm()` корректно останавливается при `reset()` и при подтверждении решения (ДА/НЕТ) — без дублей с зацикленным beep оверлея Decision Confirmation.
 
 #### 3.2. HitListScheduler: контракт триггера
 - Daily trigger генерирует “event” в момент HH:mm.

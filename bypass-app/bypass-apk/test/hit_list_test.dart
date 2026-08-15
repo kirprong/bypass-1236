@@ -11,7 +11,7 @@ void main() {
   });
 
   group('TASK-V1.3-002: autoStartFromScheduler contract', () {
-    test('transitions to phase 0 with needsTargetConfirmation and records window',
+    test('transitions to phase 0 with needsDecisionConfirmation and records window',
         () async {
       final timer = TimerProvider();
       await timer.initialize();
@@ -21,7 +21,7 @@ void main() {
 
       expect(result, isTrue);
       expect(timer.currentPhaseIndex, 0);
-      expect(timer.needsTargetConfirmation, isTrue);
+      expect(timer.needsDecisionConfirmation, isTrue);
       expect(timer.isRunning, isFalse);
       expect(timer.hitListLastExecutedMinuteWindow,
           AppConstants.hitListWindowKey(at));
@@ -65,7 +65,7 @@ void main() {
 
       // First processing fires auto-start.
       hitList.processScheduledTriggers();
-      expect(timer.needsTargetConfirmation, isTrue);
+      expect(timer.needsDecisionConfirmation, isTrue);
       expect(timer.currentPhaseIndex, 0);
       expect(hitList.lastExecutedWindow, windowKey);
 

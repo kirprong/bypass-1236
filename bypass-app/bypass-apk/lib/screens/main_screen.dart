@@ -114,9 +114,9 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin {
                   ],
                 ),
                 
-                // Агрессивный оверлей подтверждения цели
-                if (timerProvider.needsTargetConfirmation)
-                  _buildTargetConfirmationOverlay(timerProvider),
+                // Агрессивный оверлей подтверждения решения
+                if (timerProvider.needsDecisionConfirmation)
+                  _buildDecisionConfirmationOverlay(timerProvider),
 
                 // Оверлей MAX FLOW confirm (V1.2): только на 3-м цикле инерции
                 if (timerProvider.showMaxFlowConfirm)
@@ -379,8 +379,8 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin {
     );
   }
 
-  /// Агрессивный оверлей подтверждения цели
-  Widget _buildTargetConfirmationOverlay(TimerProvider timer) {
+  /// Агрессивный оверлей подтверждения решения
+  Widget _buildDecisionConfirmationOverlay(TimerProvider timer) {
     return Positioned.fill(
       child: AnimatedBuilder(
         animation: _flashAnimation,
@@ -408,7 +408,7 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin {
                     children: [
                       // Заголовок
                       Text(
-                        'ЦЕЛЬ НАЙДЕНА?',
+                        'РЕШЕНИЕ ПРИНЯТО?',
                         style: TextStyle(
                           fontSize: 48,
                           fontWeight: FontWeight.w900,
@@ -428,7 +428,7 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin {
                       
                       // Подзаголовок на английском
                       Text(
-                        'TARGET ACQUIRED?',
+                        'DECISION MADE?',
                         style: TextStyle(
                           fontSize: 24,
                           fontWeight: FontWeight.w700,
@@ -442,9 +442,9 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin {
                       
                       // Кнопка ДА (Зеленая/Неоновая)
                       _buildConfirmationButton(
-                        text: 'ДА\nОРУЖИЕ К БОЮ',
+                        text: 'ДА. ДЕЛАЙ ЭТО\nПРЯМО ЗДЕСЬ И СЕЙЧАС!',
                         color: const Color(0xFF00FF00),
-                        onTap: () => timer.confirmTargetFound(),
+                        onTap: () => timer.confirmDecisionYes(),
                         icon: Icons.check_circle,
                       ),
                       
@@ -452,9 +452,9 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin {
                       
                       // Кнопка НЕТ (Красная/Серая)
                       _buildConfirmationButton(
-                        text: 'НЕТ\nНАЗАД К ПОИСКУ',
+                        text: 'НЕТ. ДУМАЙ ЕЩЁ',
                         color: const Color(0xFF666666),
-                        onTap: () => timer.confirmTargetNotFound(),
+                        onTap: () => timer.confirmDecisionNo(),
                         icon: Icons.cancel,
                       ),
                     ],

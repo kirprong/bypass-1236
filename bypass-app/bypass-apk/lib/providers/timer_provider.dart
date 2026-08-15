@@ -22,7 +22,7 @@ class TimerProvider with ChangeNotifier {
   int _inertiaSeconds = 0;
   bool _isWaitingForChoice = false;
   bool _hasPlayedWarning = false;
-  bool _needsTargetConfirmation = false;
+  bool _needsDecisionConfirmation = false;
   double _timeWarpScale = AppConstants.timeWarpDefault; // Глобальный масштаб времени
   int _currentPhaseBaseSeconds =
       AppConstants.phase1Duration; // Немасштабированная база текущей фазы (для пересчёта)
@@ -55,7 +55,7 @@ class TimerProvider with ChangeNotifier {
   bool get isInertiaMode => _isInertiaMode;
   int get inertiaSeconds => _inertiaSeconds;
   bool get isWaitingForChoice => _isWaitingForChoice;
-  bool get needsTargetConfirmation => _needsTargetConfirmation;
+  bool get needsDecisionConfirmation => _needsDecisionConfirmation;
   double get timeWarpScale => _timeWarpScale;
   int get inertiaCycleCount => _inertiaCycleCount;
   int? get inertiaNextPulseAtMillis => _inertiaNextPulseAtMillis;
@@ -139,7 +139,7 @@ class TimerProvider with ChangeNotifier {
         final newRemaining = (remaining * scale / oldScale).round();
         _inertiaNextPulseAtMillis = now + newRemaining;
       }
-    } else if (!_isRunning && !_isInertiaMode && !_needsTargetConfirmation) {
+    } else if (!_isRunning && !_isInertiaMode && !_needsDecisionConfirmation) {
       // На паузе/ожидании: подстраиваем отображаемое оставшееся время под новый масштаб.
       _remainingSeconds = _getScaledPhaseDuration(_currentPhaseIndex, _currentPhaseBaseSeconds);
     }
@@ -174,7 +174,7 @@ class TimerProvider with ChangeNotifier {
       'remainingSeconds': _remainingSeconds,
       'inertiaSeconds': _inertiaSeconds,
       'isWaitingForChoice': _isWaitingForChoice,
-      'needsTargetConfirmation': _needsTargetConfirmation,
+      'needsDecisionConfirmation': _needsDecisionConfirmation,
       'timeWarpScale': _timeWarpScale,
       'currentPhaseBaseSeconds': _currentPhaseBaseSeconds,
       'inertiaCycleCount': _inertiaCycleCount,
@@ -204,7 +204,7 @@ class TimerProvider with ChangeNotifier {
             AppConstants.getPhaseDuration(_currentPhaseIndex);
         _inertiaSeconds = state['inertiaSeconds'] ?? 0;
         _isWaitingForChoice = state['isWaitingForChoice'] ?? false;
-        _needsTargetConfirmation = state['needsTargetConfirmation'] ?? false;
+        _needsDecisionConfirmation = state['needsDecisionConfirmation'] ?? false;
         _timeWarpScale = (state['timeWarpScale'] as num?)?.toDouble() ?? AppConstants.timeWarpDefault;
         if (_timeWarpScale.isNaN || _timeWarpScale.isInfinite) {
           _timeWarpScale = AppConstants.timeWarpDefault;
@@ -425,7 +425,7 @@ class TimerProvider with ChangeNotifier {
     _lastInertiaPhaseTransitionId = null;
     _currentStrikeTransitionId = null;
     _isWaitingForChoice = false;
-    _needsTargetConfirmation = false;
+    _needsDecisionConfirmation = false;
     _hasPlayedWarning = false;
     _phaseCompleted = false;
     WakelockPlus.disable();
@@ -443,8 +443,8 @@ class TimerProvider with ChangeNotifier {
   /// - Guard: если таймер уже запущен (_isRunning) — НЕ инициировать авто-старт (no-op).
   /// - Идемпотентность "один раз на окно": windowKey = yyyy-MM-dd|HH:mm, вычисляемый
   ///   из [scheduledAtLocalMillis]; если окно уже выполнялось — no-op.
-  /// - Переводит систему в состояние "фаза 0 → ожидание подтверждения цели":
-  ///   currentPhaseIndex = 0, needsTargetConfirmation = true.
+  /// - Переводит систему в состояние "фаза 0 → ожидание подтверждения решения":
+  ///   currentPhaseIndex = 0, needsDecisionConfirmation = true.
   /// - Побочные эффекты (звук/уведомления) best-effort: state machine не ломается
   ///   при ошибках audio/notification.
   ///
@@ -481,11 +481,11 @@ class TimerProvider with ChangeNotifier {
     _lastInertiaPhaseTransitionId = null;
     _currentStrikeTransitionId = null;
 
-    // Переход в фазу 0 с ожиданием подтверждения цели ("ЦЕЛЬ НАЙДЕНА?").
+    // Переход в фазу 0 с ожиданием подтверждения решения ("РЕШЕНИЕ ПРИНЯТО?").
     _currentPhaseIndex = 0;
     _currentPhaseBaseSeconds = AppConstants.phase1Duration;
     _remainingSeconds = _getScaledPhaseDuration(0, AppConstants.phase1Duration);
-    _needsTargetConfirmation = true;
+    _needsDecisionConfirmation = true;
 
     // Фиксируем выполненное окно (idempotency).
     _hitListLastExecutedMinuteWindow = windowKey;
@@ -549,7 +549,7 @@ class TimerProvider with ChangeNotifier {
     _stopDeadManSwitch();
     _audioService.stopLoopingBeep();
     _isWaitingForChoice = false;
-    _needsTargetConfirmation = false;
+    _needsDecisionConfirmation = false;
 
     _isInertiaMode = true;
     _inertiaSeconds = 0;
@@ -689,7 +689,7 @@ class TimerProvider with ChangeNotifier {
     _inertiaStartTimeMillis = null;
     _inertiaSeconds = 0;
     _hasPlayedWarning = false;
-    _needsTargetConfirmation = false;
+    _needsDecisionConfirmation = false;
     _phaseCompleted = false;
 
     _audioService.playPhaseSound(_currentPhaseIndex);
@@ -731,7 +731,7 @@ class TimerProvider with ChangeNotifier {
     final now = DateTime.now().millisecondsSinceEpoch;
     _targetEndTimeMillis = now + (_remainingSeconds * 1000);
     _hasPlayedWarning = false;
-    _needsTargetConfirmation = false;
+    _needsDecisionConfirmation = false;
     _phaseCompleted = false;
 
     if (!_isRunning) {
@@ -746,23 +746,23 @@ class TimerProvider with ChangeNotifier {
 
   /// Завершение фазы (АВТОМАТИЧЕСКИЕ ПЕРЕХОДЫ 1→2→3)
   void _onPhaseComplete() {
-    // Фаза 0 (THINKING) завершена → ОСТАНАВЛИВАЕМ и показываем подтверждение цели
+    // Фаза 0 (THINKING) завершена → ОСТАНАВЛИВАЕМ и показываем подтверждение решения
     if (_currentPhaseIndex == 0) {
       _isRunning = false;
       _timer?.cancel();
       _targetEndTimeMillis = null;
-      _needsTargetConfirmation = true;
+      _needsDecisionConfirmation = true;
 
       // Запускаем зацикленный beep.mp3 на 20 минут
       _audioService.startLoopingBeep();
       
-      // Уведомление о подтверждении цели
+      // Уведомление о подтверждении решения
       _notificationService.showSimpleNotification(
-        title: '🎯 ЦЕЛЬ НАЙДЕНА?',
-        body: 'Подтвердите обнаружение цели',
+        title: '🎯 РЕШЕНИЕ ПРИНЯТО?',
+        body: 'Подтвердите принятие решения',
       );
 
-      debugPrint('TIMER: Фаза 0 завершена. Ожидание подтверждения цели');
+      debugPrint('TIMER: Фаза 0 завершена. Ожидание подтверждения решения');
 
       notifyListeners();
       _saveState();
@@ -840,7 +840,7 @@ class TimerProvider with ChangeNotifier {
       _currentPhaseBaseSeconds = AppConstants.phase1Duration;
       _hasPlayedWarning = false;
       _isWaitingForChoice = false;
-      _needsTargetConfirmation = false;
+      _needsDecisionConfirmation = false;
       _phaseCompleted = false;
 
       final now = DateTime.now().millisecondsSinceEpoch;
@@ -859,13 +859,13 @@ class TimerProvider with ChangeNotifier {
     _deadManSwitchTimer = null;
   }
 
-  /// Подтверждение цели - ДА (переход к фазе 1)
-  void confirmTargetFound() {
-    if (!_needsTargetConfirmation) return;
+  /// Подтверждение решения - ДА (переход к фазе 1)
+  void confirmDecisionYes() {
+    if (!_needsDecisionConfirmation) return;
 
     _audioService.stopLoopingBeep();
     _audioService.stopScheduleAlarm();
-    _needsTargetConfirmation = false;
+    _needsDecisionConfirmation = false;
     _currentPhaseIndex = 1;
     _currentPhaseBaseSeconds = AppConstants.getPhaseDuration(1);
     _remainingSeconds = _getScaledPhaseDuration(1, AppConstants.phase2Duration);
@@ -879,7 +879,7 @@ class TimerProvider with ChangeNotifier {
     _audioService.playPhaseSound(_currentPhaseIndex);
 
     _notificationService.showSimpleNotification(
-      title: '✅ Цель подтверждена!',
+      title: '✅ Решение принято!',
       body: 'ОРУЖИЕ К БОЮ - 2 минуты подготовки',
     );
 
@@ -888,17 +888,17 @@ class TimerProvider with ChangeNotifier {
     _saveState();
   }
 
-  /// Подтверждение цели - НЕТ (возврат к началу)
-  void confirmTargetNotFound() {
-    if (!_needsTargetConfirmation) return;
+  /// Подтверждение решения - НЕТ (возврат к началу)
+  void confirmDecisionNo() {
+    if (!_needsDecisionConfirmation) return;
 
     _audioService.stopLoopingBeep();
     _audioService.stopScheduleAlarm();
-    _needsTargetConfirmation = false;
+    _needsDecisionConfirmation = false;
 
     _notificationService.showSimpleNotification(
-      title: '🔄 Возврат к поиску',
-      body: 'Начинаем новый цикл поиска цели',
+      title: '🔄 Возврат к размышлениям',
+      body: 'Начинаем новый цикл принятия решения',
     );
 
     _currentPhaseIndex = 0;

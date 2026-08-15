@@ -44,7 +44,7 @@ class AppConstants {
   static const String phase4Name = 'ПЕРЕЗАГРУЗКА';
 
   // Тексты для фаз
-  static const String phase1Text = 'ЦЕЛЬ?';
+  static const String phase1Text = 'РЕШЕНИЕ?';
   static const String phase2Text = 'ОРУЖИЕ К БОЮ!';
   static const String phase3Text = 'УНИЧТОЖАЙ';
   static const String phase4Text = 'БУДЬ ГОТОВ ВСЕГДА';
